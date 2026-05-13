@@ -5,7 +5,7 @@ from ultralytics import YOLO
 import os
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Digital Parkhi 2.0", page_icon="🌾", layout="wide")
+st.set_page_config(page_title="Digital Parkhi", page_icon="🌾", layout="wide")
 
 # --- SESSION STATE ---
 if 'page' not in st.session_state: st.session_state.page = 'welcome'
@@ -55,7 +55,7 @@ elif st.session_state.page == 'select_cat':
 
 elif st.session_state.page == 'upload':
     st.header(f"Upload {st.session_state.grain} - {st.session_state.cat}")
-    files = st.file_uploader("Select 4-5 images of the 50gm sample", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
+    files = st.file_uploader("Select 3-4 images of the 50gm sample", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
     
     if st.button("Run Analysis") and files:
         # Convert uploaded files to OpenCV format
