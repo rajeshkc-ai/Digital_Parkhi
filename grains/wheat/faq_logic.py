@@ -78,3 +78,68 @@ def analyze_faq(images, model):
     
     # Return 4 items to match your app.py: counts, total, norms, status
     return master_counts, grand_total, norms, final_status
+    
+def generate_faq_pdf(total, counts, norms, final_status):
+    """
+    Generates the PDF report and returns the path to the temp file.
+    """
+    pdf = FPDF()
+    pdf.add_page()
+
+    # Header
+    pdf.set_font("Arial", 'B', 16)
+    pdf.set_text_color(26, 95, 122)
+    pdf.cell(0, 10, "Digital Parkhi 2.0: Official QC Report", ln=True, align='C')
+    pdf.set_font("Arial", '', 10)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 10, f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align='C')
+    pdf.ln(10)
+
+    # Summary Info
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, f"TOTAL GRAINS SCANNED: {total}", ln=True)
+    pdf.ln(5)
+
+    # Table Header
+    pdf.set_font("Arial", 'B', 10)
+    pdf.set_fill_color(200, 220, 255)
+    pdf.cell(60, 10, " Category", 1, 0, 'L', True)
+    pdf.cell(40, 10, " Found %", 1, 0, 'C', True)
+    pdf.cell(40, 10, " Limit %", 1, 0, 'C', True)
+    pdf.cell(40, 10, " Status", 1, 1, 'C', True)
+
+    # Table Rows
+    pdf.set_font("Arial", '', 10)
+    categories = ['Foreign Matter', 'Other Foodgrains', 'Damage', 'Slightly Damage', 'Ergoty Damage']
+    for cat in categories:
+        val = (counts.get(cat, 0) / total) * 100 if total > 0 else 0
+        limit = norms[cat]
+        status = "OK" if val <= limit else "FAIL"
+
+        pdf.cell(60, 10, f" {cat}", 1)
+        pdf.cell(40, 10, f"{val:.2f}%", 1, 0, 'C')
+        pdf.cell(40, 10, f"{limit}%", 1, 0, 'C')
+
+        if status == "FAIL": pdf.set_text_color(200, 0, 0)
+        else: pdf.set_text_color(0, 128, 0)
+        pdf.cell(40, 10, status, 1, 1, 'C')
+        pdf.set_text_color(0, 0, 0)
+
+    # S&B Grouping
+    sb_val = ((counts.get('Shrivelled', 0) + counts.get('Broken', 0)) / total) * 100 if total > 0 else 0
+    sb_status = "OK" if sb_val <= 6.0 else "FAIL"
+    pdf.cell(60, 10, " Shrivelled & Broken", 1)
+    pdf.cell(40, 10, f"{sb_val:.2f}%", 1, 0, 'C')
+    pdf.cell(40, 10, " 6.00%", 1, 0, 'C')
+    pdf.cell(40, 10, sb_status, 1, 1, 'C')
+
+    pdf.ln(15)
+    pdf.set_font("Arial", 'B', 14)
+    if final_status == "ACCEPTED (FAQ)": pdf.set_text_color(0, 128, 0)
+    else: pdf.set_text_color(200, 0, 0)
+    pdf.cell(0, 15, f"RESULT: {final_status}", border=1, ln=True, align='C')
+
+    # Save to a temporary file for Streamlit download
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    pdf.output(temp_file.name)
+    return temp_file.name
