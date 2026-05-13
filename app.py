@@ -66,7 +66,7 @@ elif st.session_state.page == 'upload':
             
             with st.spinner("Analyzing samples..."):
                 # Run the model on the list of images
-                results = model.predict(cv_imgs, conf=0.20)
+                results = model.predict(cv_imgs, conf=0.25)
                 
                 # 1. Track ACTUAL counts per individual file
                 individual_counts = []
