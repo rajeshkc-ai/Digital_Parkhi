@@ -66,5 +66,5 @@ elif st.session_state.page == 'upload':
                 from grains.rice.rrc_logic import analyze_rrc as scan
             # (Add other elifs for RBC, RRA, RBA)
             
-        counts, total, norms = scan(cv_imgs, model)
+        counts, total, norms, status = scan(cv_imgs, model)
         st.write(counts) # Displaying raw counts for now
