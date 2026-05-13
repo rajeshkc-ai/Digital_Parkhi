@@ -89,10 +89,10 @@ def generate_faq_pdf(total, counts, norms, final_status):
     # Header
     pdf.set_font("Arial", 'B', 16)
     pdf.set_text_color(26, 95, 122)
-    pdf.cell(0, 10, "Digital Parkhi 2.0: Official QC Report", ln=True, align='C')
+    pdf.cell(0, 10, "Digital Parkhi : Official QC Report", ln=True, align='C')
     pdf.set_font("Arial", '', 10)
     pdf.set_text_color(0, 0, 0)
-    pdf.cell(0, 10, f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align='C')
+    pdf.cell(0, 10, f"Generated on: {datetime.now().strftime('%d-%m-%Y %H:%M')}", ln=True, align='C')
     pdf.ln(10)
 
     # Summary Info
