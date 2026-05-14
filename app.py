@@ -79,8 +79,8 @@ elif st.session_state.page == 'upload':
                         aggregated_results[cls_name] = aggregated_results.get(cls_name, 0) + 1
 
         except Exception as e:
-        st.error(f"AI Model Error: {e}")
-        st.stop()
+            st.error(f"AI Model Error: {e}")
+            st.stop()
         
         # --- FCI STANDARDS (RMS 2025-26) ---
         norms = {
