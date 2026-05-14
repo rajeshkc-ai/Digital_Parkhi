@@ -2,7 +2,7 @@ import streamlit as st
 import cv2
 import numpy as np
 from ultralytics import YOLO
-from fpdf import FPDF  # Changed to FPDF to match your logic
+from fpdf import FPDF
 import io
 from datetime import datetime
 
@@ -20,10 +20,9 @@ def load_global_model():
 
 model = load_global_model()
 
-# --- THE "TRICK" METHODS ---
+# --- SAHI & ENHANCEMENT LOGIC ---
 
 def validate_and_enhance(img):
-    """Fixes lighting and contrast before AI scans"""
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8,8))
@@ -32,7 +31,6 @@ def validate_and_enhance(img):
     return cv2.cvtColor(img_enhanced, cv2.COLOR_LAB2BGR)
 
 def get_sliced_predictions(cv_img, model, slice_size=640, overlap=0.25):
-    """Slices the image into tiles so the AI can see grains clearly"""
     class_map = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
                  4: 'Shrivelled', 5: 'Slightly Damage', 6: 'Sound Grain'}
     
@@ -59,110 +57,142 @@ def get_sliced_predictions(cv_img, model, slice_size=640, overlap=0.25):
                     # --- VIGILANCE FILTERS ---
                     if label == "Ergoty Damage":
                         if conf < 0.96 or pixel_area < 80 or aspect_ratio < 1.6:
-                            cls = 6  # Change to Sound Grain
+                            cls = 6 
                     elif label == "Damage" and conf < 0.50:
                         cls = 6
                     
                     predictions.append(cls)
     return predictions
 
-# --- UI NAVIGATION ---
+# --- PDF GENERATOR (STABLE VERSION) ---
+def create_pdf_report(total, counts, norms, final_status, grain, cat):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, "Digital Parkhi 2.0: Official QC Report", ln=True, align='C')
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(0, 10, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align='C')
+    pdf.ln(10)
+
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, f"TOTAL GRAINS SCANNED: {total}", ln=True)
+    pdf.ln(5)
+
+    # Table Header
+    pdf.set_fill_color(200, 220, 255)
+    pdf.cell(60, 10, " Category", 1, 0, 'L', True)
+    pdf.cell(40, 10, " Found %", 1, 0, 'C', True)
+    pdf.cell(40, 10, " Limit %", 1, 0, 'C', True)
+    pdf.cell(40, 10, " Status", 1, 1, 'C', True)
+
+    pdf.set_font("Arial", '', 10)
+    for c, limit in norms.items():
+        val = (counts.get(c, 0) / total * 100) if total > 0 else 0
+        status = "OK" if val <= limit else "FAIL"
+        pdf.cell(60, 10, f" {c}", 1)
+        pdf.cell(40, 10, f"{val:.2f}%", 1, 0, 'C')
+        pdf.cell(40, 10, f"{limit}%", 1, 0, 'C')
+        pdf.cell(40, 10, status, 1, 1, 'C')
+
+    # Shrivelled & Broken
+    sb_val = ((counts.get('Shrivelled', 0) + counts.get('Broken', 0)) / total * 100) if total > 0 else 0
+    pdf.cell(60, 10, " Shrivelled & Broken", 1)
+    pdf.cell(40, 10, f"{sb_val:.2f}%", 1, 0, 'C')
+    pdf.cell(40, 10, " 6.00%", 1, 0, 'C')
+    pdf.cell(40, 10, "OK" if sb_val <= 6.0 else "FAIL", 1, 1, 'C')
+
+    pdf.ln(10)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 15, f"RESULT: {final_status}", border=1, ln=True, align='C')
+    
+    return pdf.output(dest='S').encode('latin-1')
+
+# --- NAVIGATION ---
 if st.session_state.page == 'welcome':
     st.title("🌾 Digital Parkhi 2.0")
-    st.info("Now using SAHI Slicing & CLAHE Enhancement for 99% accuracy.")
-    if st.button("Start Professional Scan"):
+    if st.button("Start Analysis"):
         st.session_state.page = 'select_grain'
         st.rerun()
 
 elif st.session_state.page == 'select_grain':
     st.header("Select Grain Type")
     col1, col2 = st.columns(2)
-    if col1.button("Wheat", use_container_width=True):
+    if col1.button("Wheat"):
         st.session_state.grain = "Wheat"
         st.session_state.page = 'select_cat'
         st.rerun()
-    if col2.button("Rice", use_container_width=True):
+    if col2.button("Rice"):
         st.session_state.grain = "Rice"
         st.session_state.page = 'select_cat'
         st.rerun()
 
 elif st.session_state.page == 'select_cat':
-    st.header(f"Category: {st.session_state.grain}")
+    st.header(f"Select Category for {st.session_state.grain}")
     opts = ["FAQ", "URS"] if st.session_state.grain == "Wheat" else ["RRC", "RBC"]
-    cat = st.selectbox("Choose Grade", opts)
+    cat = st.selectbox("Grade", opts)
     if st.button("Proceed"):
         st.session_state.cat = cat
         st.session_state.page = 'upload'
         st.rerun()
 
 elif st.session_state.page == 'upload':
-    st.header(f"Analyze {st.session_state.grain}")
-    files = st.file_uploader("Upload Samples", accept_multiple_files=True, type=['jpg', 'png', 'jpeg'])
+    st.header(f"Deep Scanning: {st.session_state.grain} ({st.session_state.cat})")
+    files = st.file_uploader("Upload Samples", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
     
-    if st.button("Run Deep Analysis") and files:
+    if st.button("Run Analysis") and files:
         class_names = ['Broken', 'Damage', 'Ergoty Damage', 'Foreign Matter', 'Shrivelled', 'Slightly Damage', 'Sound Grain']
         master_counts = {name: 0 for name in class_names}
+        file_stats = []
         grand_total = 0
 
-        with st.spinner("Slicing and Enhancing images for Deep Scan..."):
+        with st.spinner("Processing Slices..."):
             for f in files:
                 file_bytes = np.asarray(bytearray(f.read()), dtype=np.uint8)
-                cv_img = cv2.imdecode(file_bytes, 1)
-                
-                preds = get_sliced_predictions(cv_img, model)
+                img = cv2.imdecode(file_bytes, 1)
+                preds = get_sliced_predictions(img, model)
                 grand_total += len(preds)
-                for p_idx in preds:
-                    master_counts[class_names[p_idx]] += 1
-                
-                st.write(f"✅ {f.name}: Found {len(preds)} grains.")
+                for p in preds: master_counts[class_names[p]] += 1
+                file_stats.append(f"Processed {f.name}: {len(preds)} grains.")
 
-        # --- CALCULATE STATUS ---
+        # FCI Standards
         norms = {'Foreign Matter': 0.75, 'Other Foodgrains': 2.0, 'Damage': 2.0, 
                  'Slightly Damage': 4.0, 'Ergoty Damage': 0.05}
         
-        rej = False
-        report_data = []
-        for cat_name, limit in norms.items():
-            found_pct = (master_counts.get(cat_name, 0) / grand_total * 100) if grand_total > 0 else 0
-            if found_pct > limit: rej = True
-            report_data.append([cat_name, found_pct, limit])
-
-        sb_pct = ((master_counts['Shrivelled'] + master_counts['Broken']) / grand_total * 100) if grand_total > 0 else 0
-        if sb_pct > 6.0: rej = True
+        rej_reasons = []
+        report_lines = []
         
-        final_status = "REJECTED" if rej else f"ACCEPTED ({st.session_state.cat})"
+        for name, limit in norms.items():
+            val = (master_counts.get(name, 0) / grand_total * 100) if grand_total > 0 else 0
+            status = "OK"
+            if val > limit:
+                status = "!! EXCEEDS LIMIT !!"
+                rej_reasons.append(name)
+            report_lines.append(f"{name.ljust(18)} : {val:5.2f}% | Limit: {limit:4}% | {status}")
 
-        # --- DISPLAY RESULTS ---
-        st.subheader("FCI AGGREGATED REPORT")
-        st.metric("Total Grains Scanned", grand_total)
+        sb_val = ((master_counts['Shrivelled'] + master_counts['Broken']) / grand_total * 100) if grand_total > 0 else 0
+        sb_status = "OK"
+        if sb_val > 6.0:
+            sb_status = "!! EXCEEDS LIMIT !!"
+            rej_reasons.append("Shrivelled & Broken")
+        report_lines.append(f"{'Shrivelled & Broken'.ljust(18)} : {sb_val:5.2f}% | Limit: 6.00% | {sb_status}")
+
+        final_status = "REJECTED" if rej_reasons else f"ACCEPTED ({st.session_state.cat})"
+
+        # --- FORMATTED OUTPUT DISPLAY ---
+        output_txt = "--- STARTING ANALYSIS ---\n"
+        output_txt += "\n".join(file_stats)
+        output_txt += "\n\n" + "="*50
+        output_txt += f"\nFCI AGGREGATED QC REPORT (RMS 2025-26)\n" + "="*50
+        output_txt += f"\nTOTAL GRAINS SCANNED : {grand_total}\n" + "-"*50 + "\n"
+        output_txt += "\n".join(report_lines)
+        output_txt += "\n" + "-"*50
+        output_txt += f"\nFINAL STATUS: {final_status}\n" + "="*50
         
-        if rej: st.error(f"RESULT: {final_status}")
-        else: st.success(f"RESULT: {final_status}")
+        st.code(output_txt, language="text")
 
-        # PDF Logic (Using your FPDF style)
-        if st.button("Generate Official PDF"):
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", 'B', 16)
-            pdf.cell(0, 10, "Digital Parkhi 2.0: Official QC Report", ln=True, align='C')
-            pdf.ln(10)
-            pdf.set_font("Arial", '', 12)
-            pdf.cell(0, 10, f"Status: {final_status}", ln=True)
-            pdf.cell(0, 10, f"Total Grains: {grand_total}", ln=True)
-            
-            # Simple PDF Table
-            pdf.ln(5)
-            pdf.cell(60, 10, "Category", 1)
-            pdf.cell(40, 10, "Found %", 1)
-            pdf.cell(40, 10, "Limit %", 1, 1)
-            
-            for row in report_data:
-                pdf.cell(60, 10, row[0], 1)
-                pdf.cell(40, 10, f"{row[1]:.2f}%", 1)
-                pdf.cell(40, 10, f"{row[2]}%", 1, 1)
-            
-            pdf_output = pdf.output(dest='S').encode('latin-1')
-            st.download_button("Download PDF", data=pdf_output, file_name="Digital_Parkhi_Report.pdf")
+        # --- DOWNLOAD BUTTON ---
+        pdf_bytes = create_pdf_report(grand_total, master_counts, norms, final_status, st.session_state.grain, st.session_state.cat)
+        st.download_button(label="📄 Download Official PDF Report", data=pdf_bytes, file_name=f"FCI_Report_{datetime.now().strftime('%d%m%y')}.pdf", mime="application/pdf")
 
     if st.button("Reset"):
         st.session_state.page = 'welcome'
