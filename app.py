@@ -57,17 +57,18 @@ elif st.session_state.page == 'upload':
     
     if st.button("Run Analysis") and files:
         cv_imgs = [cv2.imdecode(np.asarray(bytearray(f.read()), dtype=np.uint8), 1) for f in files]
+        
+        # Initialize variables before the try block
+        individual_counts = []
+        aggregated_results = {}
+        total_grains = 0
         try:
             # Import your modular logic
             from grains.wheat.faq_logic import analyze_faq, generate_faq_pdf
             
-            with st.spinner("AI is counting grains..."):
-                # Increased sensitivity (conf) and image size (imgsz) to catch all grains
-                results = model.predict(cv_imgs, conf=0.10, imgsz=640)
-            
-                individual_counts = []
-                aggregated_results = {}
-                total_grains = 0
+            with st.spinner("AI is performing Deep Scan..."):
+                # Using lower confidence to ensure actual grain count is captured
+                results = model.predict(cv_imgs, conf=0.10, imgsz=640)             
             
                 for res in results:
                     cnt = len(res.boxes)
@@ -77,6 +78,10 @@ elif st.session_state.page == 'upload':
                         cls_name = model.names[int(box.cls)]
                         aggregated_results[cls_name] = aggregated_results.get(cls_name, 0) + 1
 
+        except Exception as e:
+        st.error(f"AI Model Error: {e}")
+        st.stop()
+        
         # --- FCI STANDARDS (RMS 2025-26) ---
         norms = {
             'Foreign Matter': 0.75,
@@ -155,9 +160,7 @@ elif st.session_state.page == 'upload':
         pdf_path = generate_faq_pdf(total_grains, aggregated_results, norms, status)
         with open(pdf_path, "rb") as f:
             st.download_button("Download Official PDF Report", f, file_name="FCI_Report.pdf")
-
-    except Exception as e:
-        st.error(f"Error: {e}")
+ 
 
 if st.button("Reset"):
     st.session_state.page = 'welcome'
