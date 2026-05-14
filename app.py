@@ -16,6 +16,7 @@ if 'cat' not in st.session_state: st.session_state.cat = None
 
 @st.cache_resource
 def load_global_model():
+    # Make sure best.pt is in your main GitHub folder
     return YOLO("best.pt")
 
 model = load_global_model()
@@ -25,6 +26,7 @@ def generate_pdf_report(total, counts, norms, status, grain_type, category):
     p = canvas.Canvas(buffer, pagesize=letter)
     p.setFont("Helvetica-Bold", 16)
     p.drawString(100, 750, f"FCI QC REPORT: {grain_type} ({category})")
+    
     p.setFont("Helvetica", 12)
     p.drawString(100, 730, f"Total Grains Scanned: {total}")
     p.line(100, 720, 500, 720)
@@ -64,7 +66,7 @@ elif st.session_state.page == 'select_grain':
         st.rerun()
 
 elif st.session_state.page == 'select_cat':
-    st.header(f"Select Category: {st.session_state.grain}")
+    st.header(f"Category: {st.session_state.grain}")
     opts = ["FAQ", "URS"] if st.session_state.grain == "Wheat" else ["RRC", "RBC"]
     cat = st.selectbox("Choose Grade", opts)
     if st.button("Proceed"):
@@ -85,7 +87,7 @@ elif st.session_state.page == 'upload':
         
         try:
             with st.spinner("AI is performing Deep Scan..."):
-                # imgsz=640 and conf=0.10 ensure small grains are not missed
+                # Lower confidence (0.10) ensures small or faint grains are counted
                 results = model.predict(cv_imgs, conf=0.10, imgsz=640)
                 for res in results:
                     cnt = len(res.boxes)
@@ -120,7 +122,7 @@ elif st.session_state.page == 'upload':
                 reasons_for_rejection.append(c)
             report_lines.append(f"{c.ljust(18)} : {val:5.2f}% | Limit: {limit:4}% | {status_label}")
 
-        # Combined count for Shrivelled & Broken
+        # Combined check for Shrivelled & Broken
         sb_val = ((aggregated_results.get('Shrivelled', 0) + aggregated_results.get('Broken', 0)) / total_grains * 100) if total_grains > 0 else 0
         sb_status = "OK"
         if sb_val > 6.0:
@@ -133,6 +135,7 @@ elif st.session_state.page == 'upload':
         # --- OUTPUT DISPLAY ---
         output_txt = "--- STARTING ANALYSIS ---\n"
         for i, f in enumerate(files):
+            # Display real individual count for each specific file name
             output_txt += f"Processed {f.name}: {individual_counts[i]} grains.\n"
 
         output_txt += f"\nTOTAL GRAINS SCANNED : {total_grains}\n" + "-"*50 + "\n"
