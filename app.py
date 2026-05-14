@@ -7,7 +7,7 @@ from reportlab.pdfgen import canvas
 import io
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Digital Parkhi 2.0", page_icon="🌾", layout="wide")
+st.set_page_config(page_title="Digital Parkhi", page_icon="🌾", layout="wide")
 
 # --- SESSION STATE ---
 if 'page' not in st.session_state: st.session_state.page = 'welcome'
@@ -46,7 +46,10 @@ def generate_pdf_report(total, counts, norms, status, grain_type, category):
 
 # --- NAVIGATION ---
 if st.session_state.page == 'welcome':
-    st.title("🌾 Digital Parkhi 2.0")
+    st.title("🌾 Digital Parkhi")
+    st.subheader("AI-Powered Grain Quality Analysis System")
+    st.markdown("---")
+    st.write("Welcome to the next generation of automated grain quality control.")
     if st.button("Start Analysis", use_container_width=True):
         st.session_state.page = 'select_grain'
         st.rerun()
