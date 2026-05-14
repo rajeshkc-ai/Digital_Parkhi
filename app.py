@@ -85,7 +85,7 @@ elif st.session_state.page == 'upload':
         
         try:
             with st.spinner("Analyzing grains..."):
-                # Lower conf (0.10) ensures all physical grains are counted
+                # Using conf=0.10 to ensure we catch all grains for the 2025-26 norms
                 results = model.predict(cv_imgs, conf=0.10, imgsz=640)
                 for res in results:
                     cnt = len(res.boxes)
@@ -120,7 +120,6 @@ elif st.session_state.page == 'upload':
                 reasons_for_rejection.append(c)
             report_lines.append(f"{c.ljust(18)} : {val:5.2f}% | Limit: {limit:4}% | {status_label}")
 
-        # Shrivelled & Broken combined
         sb_val = ((aggregated_results.get('Shrivelled', 0) + aggregated_results.get('Broken', 0)) / total_grains * 100) if total_grains > 0 else 0
         sb_status = "OK"
         if sb_val > 6.0:
