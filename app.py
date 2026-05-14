@@ -2,10 +2,12 @@ import streamlit as st
 import cv2
 import numpy as np
 from ultralytics import YOLO
-# import os
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+import io
 
 # --- PAGE CONFIG ---
-st.set_page_config(page_title="Digital Parkhi", page_icon="🌾", layout="wide")
+st.set_page_config(page_title="Digital Parkhi 2.0", page_icon="🌾", layout="wide")
 
 # --- SESSION STATE ---
 if 'page' not in st.session_state: st.session_state.page = 'welcome'
@@ -14,18 +16,37 @@ if 'cat' not in st.session_state: st.session_state.cat = None
 
 @st.cache_resource
 def load_global_model():
-    # Ensure best.pt is in the same directory as app.py on GitHub
     return YOLO("best.pt")
 
 model = load_global_model()
 
-# --- NAVIGATION & UI ---
+def generate_pdf_report(total, counts, norms, status, grain_type, category):
+    buffer = io.BytesIO()
+    p = canvas.Canvas(buffer, pagesize=letter)
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(100, 750, f"FCI QC REPORT: {grain_type} ({category})")
+    p.setFont("Helvetica", 12)
+    p.drawString(100, 730, f"Total Grains Scanned: {total}")
+    p.line(100, 720, 500, 720)
+    
+    y = 700
+    for key, limit in norms.items():
+        val = (counts.get(key, 0) / total * 100) if total > 0 else 0
+        p.drawString(100, y, f"{key}: {val:.2f}% (Limit: {limit}%)")
+        y -= 20
+    
+    p.line(100, y, 500, y)
+    y -= 30
+    p.setFont("Helvetica-Bold", 14)
+    p.drawString(100, y, f"FINAL STATUS: {status}")
+    p.showPage()
+    p.save()
+    buffer.seek(0)
+    return buffer
 
+# --- UI NAVIGATION ---
 if st.session_state.page == 'welcome':
-    st.title("🌾 Digital Parkhi")
-    st.subheader("AI-Powered Grain Quality Analysis System")
-    st.markdown("---")
-    st.write("Welcome to the next generation of automated grain quality control.")
+    st.title("🌾 Digital Parkhi 2.0")
     if st.button("Start Analysis", use_container_width=True):
         st.session_state.page = 'select_grain'
         st.rerun()
@@ -44,7 +65,7 @@ elif st.session_state.page == 'select_grain':
 
 elif st.session_state.page == 'select_cat':
     st.header(f"Select Category: {st.session_state.grain}")
-    opts = ["FAQ", "URS"] if st.session_state.grain == "Wheat" else ["RRC", "RBC", "RRA", "RBA", "FRK RBC", "FRK RBA"]
+    opts = ["FAQ", "URS"] if st.session_state.grain == "Wheat" else ["RRC", "RBC"]
     cat = st.selectbox("Choose Grade", opts)
     if st.button("Proceed"):
         st.session_state.cat = cat
@@ -58,18 +79,13 @@ elif st.session_state.page == 'upload':
     if st.button("Run Analysis") and files:
         cv_imgs = [cv2.imdecode(np.asarray(bytearray(f.read()), dtype=np.uint8), 1) for f in files]
         
-        # Initialize variables before the try block
         individual_counts = []
         aggregated_results = {}
         total_grains = 0
+        
         try:
-            # Import your modular logic
-            from grains.wheat.faq_logic import analyze_faq, generate_faq_pdf
-            
             with st.spinner("AI is performing Deep Scan..."):
-                # Using lower confidence to ensure actual grain count is captured
-                results = model.predict(cv_imgs, conf=0.10, imgsz=640)             
-            
+                results = model.predict(cv_imgs, conf=0.10, imgsz=640)
                 for res in results:
                     cnt = len(res.boxes)
                     individual_counts.append(cnt)
@@ -77,91 +93,47 @@ elif st.session_state.page == 'upload':
                     for box in res.boxes:
                         cls_name = model.names[int(box.cls)]
                         aggregated_results[cls_name] = aggregated_results.get(cls_name, 0) + 1
-
         except Exception as e:
-            st.error(f"AI Model Error: {e}")
+            st.error(f"Analysis Error: {e}")
             st.stop()
-        
-        # --- FCI STANDARDS (RMS 2025-26) ---
-        norms = {
-            'Foreign Matter': 0.75,
-            'Other Foodgrains': 2.0,
-            'Damage': 2.0,
-            'Slightly Damage': 4.0,
-            'Ergoty Damage': 0.05,
-            'Shrivelled & Broken': 6.0
-        }
 
-        # Logic to determine status
+        norms = {'Foreign Matter': 0.75, 'Other Foodgrains': 2.0, 'Damage': 2.0, 'Slightly Damage': 4.0, 'Ergoty Damage': 0.05, 'Shrivelled & Broken': 6.0}
+        
         reasons_for_rejection = []
-        # Check for Rejection
-        is_rejected = False
         report_lines = []
         
-        categories = ['Foreign Matter', 'Other Foodgrains', 'Damage', 'Slightly Damage', 'Ergoty Damage']
-        for c in categories:
+        # Calculate percentages and check rejection
+        for c in ['Foreign Matter', 'Other Foodgrains', 'Damage', 'Slightly Damage', 'Ergoty Damage']:
             val = (aggregated_results.get(c, 0) / total_grains * 100) if total_grains > 0 else 0
             limit = norms[c]
             status_label = "OK"
             if val > limit:
                 status_label = "!! EXCEEDS LIMIT !!"
-                is_rejected = True
-                #reasons_for_rejection.append(c)
+                reasons_for_rejection.append(c)
             report_lines.append(f"{c.ljust(18)} : {val:5.2f}% | Limit: {limit:4}% | {status_label}")
 
-        # Shrivelled & Broken combined
         sb_val = ((aggregated_results.get('Shrivelled', 0) + aggregated_results.get('Broken', 0)) / total_grains * 100) if total_grains > 0 else 0
         sb_status = "OK"
         if sb_val > 6.0:
             sb_status = "!! EXCEEDS LIMIT !!"
-            is_rejected = True
-            #reasons_for_rejection.append("Shrivelled & Broken")
+            reasons_for_rejection.append("Shrivelled & Broken")
         report_lines.append(f"{'Shrivelled & Broken'.ljust(18)} : {sb_val:5.2f}% | Limit: 6.00% | {sb_status}")
 
-        final_status = "REJECTED" if is_rejected else f"ACCEPTED ({st.session_state.cat})"
+        final_status = "REJECTED" if reasons_for_rejection else f"ACCEPTED ({st.session_state.cat})"
 
-        # --- START OUTPUT DISPLAY ---
-        output = "--- STARTING ANALYSIS ---\n"
+        # Output Display
+        output_txt = "--- STARTING ANALYSIS ---\n"
         for i, f in enumerate(files):
-        # Now showing the REAL count from individual_counts list
-            output += f"Processed {f.name}: {individual_counts[i]} grains.\n"
+            output_txt += f"Processed {f.name}: {individual_counts[i]} grains.\n"
 
-        output += "\n" + "="*50 + "\n"
-        output += "FCI AGGREGATED QC REPORT (RMS 2025-26)\n"
-        output += "="*50 + "\n"
-        output += f"TOTAL GRAINS SCANNED : {total_grains}\n"
-        output += "-"*50 + "\n"
-        output += "\n".join(report_lines) + "\n"
-        output += "-"*50 + "\n"
-        output += f"FINAL STATUS: {final_status}\n"
-        output += "="*50 + "\n"
+        output_txt += f"\nTOTAL GRAINS SCANNED : {total_grains}\n" + "-"*50 + "\n"
+        output_txt += "\n".join(report_lines) + f"\nFINAL STATUS: {final_status}\n"
+        st.code(output_txt, language="text")
 
-        categories = ['Foreign Matter', 'Other Foodgrains', 'Damage', 'Slightly Damage', 'Ergoty Damage']
-        for cat in categories:
-            count = aggregated_results.get(cat, 0)
-            perc = (count / total_grains * 100) if total_grains > 0 else 0
-            limit = norms.get(cat, 0)
-            msg = "!! EXCEEDS LIMIT !!" if perc > limit else "OK"
-            output += f"{cat.ljust(18)} : {perc:5.2f}% | Limit: {limit:4}% | {msg}\n"
+        # PDF Print Button
+        pdf_file = generate_pdf_report(total_grains, aggregated_results, norms, final_status, st.session_state.grain, st.session_state.cat)
+        st.download_button(label="📄 Download PDF Report", data=pdf_file, file_name="FCI_Quality_Report.pdf", mime="application/pdf")
 
-        # Shrivelled & Broken (Combined)
-        sb_count = aggregated_results.get('Shrivelled', 0) + aggregated_results.get('Broken', 0)
-        sb_perc = (sb_count / total_grains * 100) if total_grains > 0 else 0
-        sb_msg = "!! EXCEEDS LIMIT !!" if sb_perc > 6.0 else "OK"
-        output += f"{'Shrivelled & Broken'.ljust(18)} : {sb_perc:5.2f}% | Limit: 6.00% | {sb_msg}\n"
-            
-        output += "-"*50 + "\n"
-        output += f"FINAL STATUS: {status}\n"
-        output += "="*50 + "\n"
-
-        st.code(output, language="text")
-
-        # PDF Section
-        pdf_path = generate_faq_pdf(total_grains, aggregated_results, norms, status)
-        with open(pdf_path, "rb") as f:
-            st.download_button("Download Official PDF Report", f, file_name="FCI_Report.pdf")
- 
-
-if st.button("Reset"):
-    st.session_state.page = 'welcome'
-    st.rerun()
+    if st.button("Reset"):
+        st.session_state.page = 'welcome'
+        st.rerun()
