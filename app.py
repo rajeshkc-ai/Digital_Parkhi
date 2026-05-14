@@ -5,7 +5,7 @@ from ultralytics import YOLO
 from grains.wheat import faq_logic # IMPORTING YOUR LOGIC FILE
 from datetime import datetime
 
-st.set_page_config(page_title="Digital Parkhi 2.0", page_icon="🌾", layout="wide")
+st.set_page_config(page_title="Digital Parkhi", page_icon="🌾", layout="wide")
 
 if 'page' not in st.session_state: st.session_state.page = 'welcome'
 if 'grain' not in st.session_state: st.session_state.grain = None
@@ -19,7 +19,7 @@ model = load_model()
 
 # --- NAVIGATION ---
 if st.session_state.page == 'welcome':
-    st.title("🌾 Digital Parkhi 2.0")
+    st.title("🌾 Digital Parkhi")
     if st.button("Start Analysis"):
         st.session_state.page = 'select_grain'
         st.rerun()
