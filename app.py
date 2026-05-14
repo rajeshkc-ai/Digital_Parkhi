@@ -32,22 +32,20 @@ if st.session_state.page == 'welcome':
 
 elif st.session_state.page == 'select_grain':
     st.header("Select Grain Type")
-    grains = ["Wheat", "Rice"]
-    cols = st.columns(2)
-    for i, g in enumerate(grains):
-        if cols[i].button(g, use_container_width=True):
-            st.session_state.grain = g
-            st.session_state.page = 'select_cat'
-            st.rerun()
+    col1, col2 = st.columns(2)
+    if col1.button("Wheat", use_container_width=True):
+        st.session_state.grain = "Wheat"
+        st.session_state.page = 'select_cat'
+        st.rerun()
+    if col2.button("Rice", use_container_width=True):
+        st.session_state.grain = "Rice"
+        st.session_state.page = 'select_cat'
+        st.rerun()
 
 elif st.session_state.page == 'select_cat':
-    st.header(f"Select Category for {st.session_state.grain}")
-    if st.session_state.grain == "Wheat":
-        opts = ["FAQ", "URS"]
-    else:
-        opts = ["RRC", "RBC", "RRA", "RBA", "FRK RBC", "FRK RBA"]
-    
-    cat = st.selectbox("Choose Grade / Category", opts)
+    st.header(f"Select Category: {st.session_state.grain}")
+    opts = ["FAQ", "URS"] if st.session_state.grain == "Wheat" else ["RRC", "RBC", "RRA", "RBA", "FRK RBC", "FRK RBA"]
+    cat = st.selectbox("Choose Grade", opts)
     if st.button("Proceed"):
         st.session_state.cat = cat
         st.session_state.page = 'upload'
@@ -60,32 +58,55 @@ elif st.session_state.page == 'upload':
     if st.button("Run Analysis") and files:
         cv_imgs = [cv2.imdecode(np.asarray(bytearray(f.read()), dtype=np.uint8), 1) for f in files]
         
-        try:
-            # Import your modular logic
-            from grains.wheat.faq_logic import analyze_faq, generate_faq_pdf
+        with st.spinner("AI is counting grains..."):
+            # Increased sensitivity (conf) and image size (imgsz) to catch all grains
+            results = model.predict(cv_imgs, conf=0.10, imgsz=640)
             
-            with st.spinner("Analyzing samples..."):
-                # Run the model on the list of images
-                results = model.predict(cv_imgs, conf=0.15)
-                
-                # 1. Track ACTUAL counts per individual file
-                individual_counts = []
-                aggregated_results = {}
-                total_grains = 0
-                
-                for res in results:
-                    img_count = len(res.boxes)
-                    individual_counts.append(img_count)
-                    total_grains += img_count
-                    
-                    # Sum up classes for the final report
-                    for box in res.boxes:
-                        cls_name = model.names[int(box.cls)]
-                        aggregated_results[cls_name] = aggregated_results.get(cls_name, 0) + 1
+            individual_counts = []
+            aggregated_results = {}
+            total_grains = 0
+            
+            for res in results:
+                cnt = len(res.boxes)
+                individual_counts.append(cnt)
+                total_grains += cnt
+                for box in res.boxes:
+                    cls_name = model.names[int(box.cls)]
+                    aggregated_results[cls_name] = aggregated_results.get(cls_name, 0) + 1
 
-                # 2. Get norms and status from your logic file
-                # (Assuming analyze_faq can accept pre-calculated totals)
-                _, _, norms, status = analyze_faq(cv_imgs, model)
+        # --- FCI STANDARDS (RMS 2025-26) ---
+        norms = {
+            'Foreign Matter': 0.75,
+            'Other Foodgrains': 2.0,
+            'Damage': 2.0,
+            'Slightly Damage': 4.0,
+            'Ergoty Damage': 0.05,
+            'Shrivelled & Broken': 6.0
+        }
+
+        # Logic to determine status
+        reasons_for_rejection = []
+        report_lines = []
+        
+        categories = ['Foreign Matter', 'Other Foodgrains', 'Damage', 'Slightly Damage', 'Ergoty Damage']
+        for c in categories:
+            val = (aggregated_results.get(c, 0) / total_grains * 100) if total_grains > 0 else 0
+            limit = norms[c]
+            status_label = "OK"
+            if val > limit:
+                status_label = "!! EXCEEDS LIMIT !!"
+                reasons_for_rejection.append(c)
+            report_lines.append(f"{c.ljust(18)} : {val:5.2f}% | Limit: {limit:4}% | {status_label}")
+
+        # Shrivelled & Broken combined
+        sb_val = ((aggregated_results.get('Shrivelled', 0) + aggregated_results.get('Broken', 0)) / total_grains * 100) if total_grains > 0 else 0
+        sb_status = "OK"
+        if sb_val > 6.0:
+            sb_status = "!! EXCEEDS LIMIT !!"
+            reasons_for_rejection.append("Shrivelled & Broken")
+        report_lines.append(f"{'Shrivelled & Broken'.ljust(18)} : {sb_val:5.2f}% | Limit: 6.00% | {sb_status}")
+
+        final_status = "REJECTED" if reasons_for_rejection else f"ACCEPTED ({st.session_state.cat})"
 
             # --- START OUTPUT DISPLAY ---
             report = "--- STARTING ANALYSIS ---\n"
