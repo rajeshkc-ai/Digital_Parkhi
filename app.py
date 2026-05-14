@@ -89,7 +89,7 @@ elif st.session_state.page == 'upload':
         try:
             with st.spinner("Analyzing grains..."):
                 # Using conf=0.10 to ensure we catch all grains for the 2025-26 norms
-                results = model.predict(cv_imgs, conf=0.20, imgsz=640)
+                results = model.predict(cv_imgs, conf=0.15, imgsz=640)
                 for res in results:
                     cnt = len(res.boxes)
                     individual_counts.append(cnt)
