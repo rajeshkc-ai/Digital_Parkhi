@@ -85,6 +85,7 @@ elif st.session_state.page == 'upload':
         
         try:
             with st.spinner("AI is performing Deep Scan..."):
+                # imgsz=640 and conf=0.10 ensure small grains are not missed
                 results = model.predict(cv_imgs, conf=0.10, imgsz=640)
                 for res in results:
                     cnt = len(res.boxes)
@@ -97,12 +98,19 @@ elif st.session_state.page == 'upload':
             st.error(f"Analysis Error: {e}")
             st.stop()
 
-        norms = {'Foreign Matter': 0.75, 'Other Foodgrains': 2.0, 'Damage': 2.0, 'Slightly Damage': 4.0, 'Ergoty Damage': 0.05, 'Shrivelled & Broken': 6.0}
+        # FCI Standards for RMS 2025-26
+        norms = {
+            'Foreign Matter': 0.75, 
+            'Other Foodgrains': 2.0, 
+            'Damage': 2.0, 
+            'Slightly Damage': 4.0, 
+            'Ergoty Damage': 0.05, 
+            'Shrivelled & Broken': 6.0
+        }
         
         reasons_for_rejection = []
         report_lines = []
         
-        # Calculate percentages and check rejection
         for c in ['Foreign Matter', 'Other Foodgrains', 'Damage', 'Slightly Damage', 'Ergoty Damage']:
             val = (aggregated_results.get(c, 0) / total_grains * 100) if total_grains > 0 else 0
             limit = norms[c]
@@ -112,6 +120,7 @@ elif st.session_state.page == 'upload':
                 reasons_for_rejection.append(c)
             report_lines.append(f"{c.ljust(18)} : {val:5.2f}% | Limit: {limit:4}% | {status_label}")
 
+        # Combined count for Shrivelled & Broken
         sb_val = ((aggregated_results.get('Shrivelled', 0) + aggregated_results.get('Broken', 0)) / total_grains * 100) if total_grains > 0 else 0
         sb_status = "OK"
         if sb_val > 6.0:
@@ -121,18 +130,18 @@ elif st.session_state.page == 'upload':
 
         final_status = "REJECTED" if reasons_for_rejection else f"ACCEPTED ({st.session_state.cat})"
 
-        # Output Display
+        # --- OUTPUT DISPLAY ---
         output_txt = "--- STARTING ANALYSIS ---\n"
         for i, f in enumerate(files):
             output_txt += f"Processed {f.name}: {individual_counts[i]} grains.\n"
 
         output_txt += f"\nTOTAL GRAINS SCANNED : {total_grains}\n" + "-"*50 + "\n"
-        output_txt += "\n".join(report_lines) + f"\nFINAL STATUS: {final_status}\n"
+        output_txt += "\n".join(report_lines) + f"\n\nFINAL STATUS: {final_status}\n"
         st.code(output_txt, language="text")
 
-        # PDF Print Button
+        # PDF Download Section
         pdf_file = generate_pdf_report(total_grains, aggregated_results, norms, final_status, st.session_state.grain, st.session_state.cat)
-        st.download_button(label="📄 Download PDF Report", data=pdf_file, file_name="FCI_Quality_Report.pdf", mime="application/pdf")
+        st.download_button(label="📄 Download Official PDF Report", data=pdf_file, file_name="FCI_Quality_Report.pdf", mime="application/pdf")
 
     if st.button("Reset"):
         st.session_state.page = 'welcome'
