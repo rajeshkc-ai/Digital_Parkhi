@@ -16,7 +16,6 @@ if 'cat' not in st.session_state: st.session_state.cat = None
 
 @st.cache_resource
 def load_global_model():
-    # Make sure best.pt is in your main GitHub folder
     return YOLO("best.pt")
 
 model = load_global_model()
@@ -26,7 +25,6 @@ def generate_pdf_report(total, counts, norms, status, grain_type, category):
     p = canvas.Canvas(buffer, pagesize=letter)
     p.setFont("Helvetica-Bold", 16)
     p.drawString(100, 750, f"FCI QC REPORT: {grain_type} ({category})")
-    
     p.setFont("Helvetica", 12)
     p.drawString(100, 730, f"Total Grains Scanned: {total}")
     p.line(100, 720, 500, 720)
@@ -46,7 +44,7 @@ def generate_pdf_report(total, counts, norms, status, grain_type, category):
     buffer.seek(0)
     return buffer
 
-# --- UI NAVIGATION ---
+# --- NAVIGATION ---
 if st.session_state.page == 'welcome':
     st.title("🌾 Digital Parkhi 2.0")
     if st.button("Start Analysis", use_container_width=True):
@@ -86,8 +84,8 @@ elif st.session_state.page == 'upload':
         total_grains = 0
         
         try:
-            with st.spinner("AI is performing Deep Scan..."):
-                # Lower confidence (0.10) ensures small or faint grains are counted
+            with st.spinner("Analyzing grains..."):
+                # Lower conf (0.10) ensures all physical grains are counted
                 results = model.predict(cv_imgs, conf=0.10, imgsz=640)
                 for res in results:
                     cnt = len(res.boxes)
@@ -97,10 +95,10 @@ elif st.session_state.page == 'upload':
                         cls_name = model.names[int(box.cls)]
                         aggregated_results[cls_name] = aggregated_results.get(cls_name, 0) + 1
         except Exception as e:
-            st.error(f"Analysis Error: {e}")
+            st.error(f"Error: {e}")
             st.stop()
 
-        # FCI Standards for RMS 2025-26
+        # FCI Standards 2025-26
         norms = {
             'Foreign Matter': 0.75, 
             'Other Foodgrains': 2.0, 
@@ -122,7 +120,7 @@ elif st.session_state.page == 'upload':
                 reasons_for_rejection.append(c)
             report_lines.append(f"{c.ljust(18)} : {val:5.2f}% | Limit: {limit:4}% | {status_label}")
 
-        # Combined check for Shrivelled & Broken
+        # Shrivelled & Broken combined
         sb_val = ((aggregated_results.get('Shrivelled', 0) + aggregated_results.get('Broken', 0)) / total_grains * 100) if total_grains > 0 else 0
         sb_status = "OK"
         if sb_val > 6.0:
@@ -132,19 +130,18 @@ elif st.session_state.page == 'upload':
 
         final_status = "REJECTED" if reasons_for_rejection else f"ACCEPTED ({st.session_state.cat})"
 
-        # --- OUTPUT DISPLAY ---
+        # Output Display
         output_txt = "--- STARTING ANALYSIS ---\n"
         for i, f in enumerate(files):
-            # Display real individual count for each specific file name
             output_txt += f"Processed {f.name}: {individual_counts[i]} grains.\n"
 
         output_txt += f"\nTOTAL GRAINS SCANNED : {total_grains}\n" + "-"*50 + "\n"
         output_txt += "\n".join(report_lines) + f"\n\nFINAL STATUS: {final_status}\n"
         st.code(output_txt, language="text")
 
-        # PDF Download Section
+        # PDF Download Button
         pdf_file = generate_pdf_report(total_grains, aggregated_results, norms, final_status, st.session_state.grain, st.session_state.cat)
-        st.download_button(label="📄 Download Official PDF Report", data=pdf_file, file_name="FCI_Quality_Report.pdf", mime="application/pdf")
+        st.download_button(label="📄 Download PDF Report", data=pdf_file, file_name="FCI_Quality_Report.pdf", mime="application/pdf")
 
     if st.button("Reset"):
         st.session_state.page = 'welcome'
