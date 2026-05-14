@@ -2,7 +2,7 @@ import streamlit as st
 import cv2
 import numpy as np
 from ultralytics import YOLO
-import os
+# import os
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Digital Parkhi", page_icon="🌾", layout="wide")
@@ -86,6 +86,8 @@ elif st.session_state.page == 'upload':
 
         # Logic to determine status
         reasons_for_rejection = []
+        # Check for Rejection
+        is_rejected = False
         report_lines = []
         
         categories = ['Foreign Matter', 'Other Foodgrains', 'Damage', 'Slightly Damage', 'Ergoty Damage']
@@ -95,7 +97,8 @@ elif st.session_state.page == 'upload':
             status_label = "OK"
             if val > limit:
                 status_label = "!! EXCEEDS LIMIT !!"
-                reasons_for_rejection.append(c)
+                is_rejected = True
+                #reasons_for_rejection.append(c)
             report_lines.append(f"{c.ljust(18)} : {val:5.2f}% | Limit: {limit:4}% | {status_label}")
 
         # Shrivelled & Broken combined
@@ -103,22 +106,27 @@ elif st.session_state.page == 'upload':
         sb_status = "OK"
         if sb_val > 6.0:
             sb_status = "!! EXCEEDS LIMIT !!"
-            reasons_for_rejection.append("Shrivelled & Broken")
+            is_rejected = True
+            #reasons_for_rejection.append("Shrivelled & Broken")
         report_lines.append(f"{'Shrivelled & Broken'.ljust(18)} : {sb_val:5.2f}% | Limit: 6.00% | {sb_status}")
 
-        final_status = "REJECTED" if reasons_for_rejection else f"ACCEPTED ({st.session_state.cat})"
+        final_status = "REJECTED" if is_rejected else f"ACCEPTED ({st.session_state.cat})"
 
             # --- START OUTPUT DISPLAY ---
-            report = "--- STARTING ANALYSIS ---\n"
+            output = "--- STARTING ANALYSIS ---\n"
             for i, f in enumerate(files):
                 # Now showing the REAL count from individual_counts list
-                report += f"Processed {f.name}: {individual_counts[i]} grains.\n"
+                output += f"Processed {f.name}: {individual_counts[i]} grains.\n"
 
-            report += "\n" + "="*50 + "\n"
-            report += "FCI AGGREGATED QC REPORT (RMS 2025-26)\n"
-            report += "="*50 + "\n"
-            report += f"TOTAL GRAINS SCANNED : {total_grains}\n"
-            report += "-"*50 + "\n"
+            output += "\n" + "="*50 + "\n"
+            output += "FCI AGGREGATED QC REPORT (RMS 2025-26)\n"
+            output += "="*50 + "\n"
+            output += f"TOTAL GRAINS SCANNED : {total_grains}\n"
+            output += "-"*50 + "\n"
+            output += "\n".join(report_lines) + "\n"
+            output += "-"*50 + "\n"
+            output += f"FINAL STATUS: {final_status}\n"
+            output += "="*50 + "\n"
 
             categories = ['Foreign Matter', 'Other Foodgrains', 'Damage', 'Slightly Damage', 'Ergoty Damage']
             for cat in categories:
@@ -126,19 +134,19 @@ elif st.session_state.page == 'upload':
                 perc = (count / total_grains * 100) if total_grains > 0 else 0
                 limit = norms.get(cat, 0)
                 msg = "!! EXCEEDS LIMIT !!" if perc > limit else "OK"
-                report += f"{cat.ljust(18)} : {perc:5.2f}% | Limit: {limit:4}% | {msg}\n"
+                output += f"{cat.ljust(18)} : {perc:5.2f}% | Limit: {limit:4}% | {msg}\n"
 
             # Shrivelled & Broken (Combined)
             sb_count = aggregated_results.get('Shrivelled', 0) + aggregated_results.get('Broken', 0)
             sb_perc = (sb_count / total_grains * 100) if total_grains > 0 else 0
             sb_msg = "!! EXCEEDS LIMIT !!" if sb_perc > 6.0 else "OK"
-            report += f"{'Shrivelled & Broken'.ljust(18)} : {sb_perc:5.2f}% | Limit: 6.00% | {sb_msg}\n"
+            output += f"{'Shrivelled & Broken'.ljust(18)} : {sb_perc:5.2f}% | Limit: 6.00% | {sb_msg}\n"
             
-            report += "-"*50 + "\n"
-            report += f"FINAL STATUS: {status}\n"
-            report += "="*50 + "\n"
+            output += "-"*50 + "\n"
+            output += f"FINAL STATUS: {status}\n"
+            output += "="*50 + "\n"
 
-            st.code(report, language="text")
+            st.code(output, language="text")
 
             # PDF Section
             pdf_path = generate_faq_pdf(total_grains, aggregated_results, norms, status)
