@@ -19,8 +19,9 @@ model = load_model()
 
 # --- NAVIGATION ---
 if st.session_state.page == 'welcome':
-    st.title("🌾 Digital Parkhi")
-    if st.button("Start Analysis"):
+    st.title("🌾 Digital Parkhi 2.0")
+    st.subheader("AI-Powered Grain Quality Analysis")
+    if st.button("Start Analysis", use_container_width=True):
         st.session_state.page = 'select_grain'
         st.rerun()
 
