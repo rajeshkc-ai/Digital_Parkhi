@@ -8,6 +8,8 @@ from datetime import datetime
 st.set_page_config(page_title="Digital Parkhi 2.0", page_icon="🌾", layout="wide")
 
 if 'page' not in st.session_state: st.session_state.page = 'welcome'
+if 'grain' not in st.session_state: st.session_state.grain = None
+if 'cat' not in st.session_state: st.session_state.cat = None
 
 @st.cache_resource
 def load_model():
@@ -15,17 +17,40 @@ def load_model():
 
 model = load_model()
 
+# --- NAVIGATION ---
 if st.session_state.page == 'welcome':
     st.title("🌾 Digital Parkhi 2.0")
     if st.button("Start Analysis"):
+        st.session_state.page = 'select_grain'
+        st.rerun()
+
+elif st.session_state.page == 'select_grain':
+    st.header("Select Grain Type")
+    col1, col2 = st.columns(2)
+    if col1.button("Wheat"):
+        st.session_state.grain = "Wheat"
+        st.session_state.page = 'select_cat'
+        st.rerun()
+    if col2.button("Rice"):
+        st.session_state.grain = "Rice"
+        st.session_state.page = 'select_cat'
+        st.rerun()
+
+elif st.session_state.page == 'select_cat':
+    st.header(f"Select Category for {st.session_state.grain}")
+    opts = ["FAQ", "URS"] if st.session_state.grain == "Wheat" else ["RRC", "RBC"]
+    cat = st.selectbox("Grade", opts)
+    if st.button("Proceed"):
+        st.session_state.cat = cat
         st.session_state.page = 'upload'
         st.rerun()
 
 elif st.session_state.page == 'upload':
-    st.header("Upload Wheat Samples (FAQ)")
-    files = st.file_uploader("Select 3-5 images", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
+    st.header(f"Deep Scanning: {st.session_state.grain} ({st.session_state.cat})")
+    files = st.file_uploader("Upload Samples", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
     
     if st.button("Run Analysis") and files:
+        class_names = ['Broken', 'Damage', 'Ergoty Damage', 'Foreign Matter', 'Shrivelled', 'Slightly Damage', 'Sound Grain']
         master_counts = {name: 0 for name in faq_logic.CLASS_MAP.values()}
         file_stats = []
         grand_total = 0
