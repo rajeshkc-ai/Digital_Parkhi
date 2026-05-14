@@ -2,7 +2,7 @@ import streamlit as st
 import cv2
 import numpy as np
 from ultralytics import YOLO
-from grains import faq_logic # IMPORTING YOUR LOGIC FILE
+from grains.wheat import faq_logic # IMPORTING YOUR LOGIC FILE
 from datetime import datetime
 
 st.set_page_config(page_title="Digital Parkhi 2.0", page_icon="🌾", layout="wide")
