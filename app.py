@@ -112,50 +112,50 @@ elif st.session_state.page == 'upload':
 
         final_status = "REJECTED" if is_rejected else f"ACCEPTED ({st.session_state.cat})"
 
-            # --- START OUTPUT DISPLAY ---
-            output = "--- STARTING ANALYSIS ---\n"
-            for i, f in enumerate(files):
-                # Now showing the REAL count from individual_counts list
-                output += f"Processed {f.name}: {individual_counts[i]} grains.\n"
+        # --- START OUTPUT DISPLAY ---
+        output = "--- STARTING ANALYSIS ---\n"
+        for i, f in enumerate(files):
+        # Now showing the REAL count from individual_counts list
+            output += f"Processed {f.name}: {individual_counts[i]} grains.\n"
 
-            output += "\n" + "="*50 + "\n"
-            output += "FCI AGGREGATED QC REPORT (RMS 2025-26)\n"
-            output += "="*50 + "\n"
-            output += f"TOTAL GRAINS SCANNED : {total_grains}\n"
-            output += "-"*50 + "\n"
-            output += "\n".join(report_lines) + "\n"
-            output += "-"*50 + "\n"
-            output += f"FINAL STATUS: {final_status}\n"
-            output += "="*50 + "\n"
+        output += "\n" + "="*50 + "\n"
+        output += "FCI AGGREGATED QC REPORT (RMS 2025-26)\n"
+        output += "="*50 + "\n"
+        output += f"TOTAL GRAINS SCANNED : {total_grains}\n"
+        output += "-"*50 + "\n"
+        output += "\n".join(report_lines) + "\n"
+        output += "-"*50 + "\n"
+        output += f"FINAL STATUS: {final_status}\n"
+        output += "="*50 + "\n"
 
-            categories = ['Foreign Matter', 'Other Foodgrains', 'Damage', 'Slightly Damage', 'Ergoty Damage']
-            for cat in categories:
-                count = aggregated_results.get(cat, 0)
-                perc = (count / total_grains * 100) if total_grains > 0 else 0
-                limit = norms.get(cat, 0)
-                msg = "!! EXCEEDS LIMIT !!" if perc > limit else "OK"
-                output += f"{cat.ljust(18)} : {perc:5.2f}% | Limit: {limit:4}% | {msg}\n"
+        categories = ['Foreign Matter', 'Other Foodgrains', 'Damage', 'Slightly Damage', 'Ergoty Damage']
+        for cat in categories:
+            count = aggregated_results.get(cat, 0)
+            perc = (count / total_grains * 100) if total_grains > 0 else 0
+            limit = norms.get(cat, 0)
+            msg = "!! EXCEEDS LIMIT !!" if perc > limit else "OK"
+            output += f"{cat.ljust(18)} : {perc:5.2f}% | Limit: {limit:4}% | {msg}\n"
 
-            # Shrivelled & Broken (Combined)
-            sb_count = aggregated_results.get('Shrivelled', 0) + aggregated_results.get('Broken', 0)
-            sb_perc = (sb_count / total_grains * 100) if total_grains > 0 else 0
-            sb_msg = "!! EXCEEDS LIMIT !!" if sb_perc > 6.0 else "OK"
-            output += f"{'Shrivelled & Broken'.ljust(18)} : {sb_perc:5.2f}% | Limit: 6.00% | {sb_msg}\n"
+        # Shrivelled & Broken (Combined)
+        sb_count = aggregated_results.get('Shrivelled', 0) + aggregated_results.get('Broken', 0)
+        sb_perc = (sb_count / total_grains * 100) if total_grains > 0 else 0
+        sb_msg = "!! EXCEEDS LIMIT !!" if sb_perc > 6.0 else "OK"
+        output += f"{'Shrivelled & Broken'.ljust(18)} : {sb_perc:5.2f}% | Limit: 6.00% | {sb_msg}\n"
             
-            output += "-"*50 + "\n"
-            output += f"FINAL STATUS: {status}\n"
-            output += "="*50 + "\n"
+        output += "-"*50 + "\n"
+        output += f"FINAL STATUS: {status}\n"
+        output += "="*50 + "\n"
 
-            st.code(output, language="text")
+        st.code(output, language="text")
 
-            # PDF Section
-            pdf_path = generate_faq_pdf(total_grains, aggregated_results, norms, status)
-            with open(pdf_path, "rb") as f:
-                st.download_button("Download Official PDF Report", f, file_name="FCI_Report.pdf")
+        # PDF Section
+        pdf_path = generate_faq_pdf(total_grains, aggregated_results, norms, status)
+        with open(pdf_path, "rb") as f:
+            st.download_button("Download Official PDF Report", f, file_name="FCI_Report.pdf")
 
-        except Exception as e:
-            st.error(f"Error: {e}")
+    except Exception as e:
+        st.error(f"Error: {e}")
 
-    if st.button("Reset"):
-        st.session_state.page = 'welcome'
-        st.rerun()
+if st.button("Reset"):
+    st.session_state.page = 'welcome'
+    st.rerun()
