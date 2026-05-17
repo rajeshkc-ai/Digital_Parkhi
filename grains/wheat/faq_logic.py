@@ -35,7 +35,7 @@ def analyze_sample(cv_img, model):
         for x in range(0, w, step):
             y2, x2 = min(y + slice_size, h), min(x + slice_size, w)
             tile = img[y:y2, x:x2]
-            preds = model.predict(tile, conf=0.30, verbose=False)
+            preds = model.predict(tile, conf=0.20, verbose=False)
             for r in preds:
                 for box in r.boxes:
                     cls = int(box.cls[0])
@@ -47,8 +47,10 @@ def analyze_sample(cv_img, model):
                     if label == "Ergoty Damage":
                         if conf < 0.96 or (bw*bh) < 80 or (max(bw,bh)/(min(bw,bh)+1e-6)) < 1.6:
                             cls = 6
-                    elif label == "Damage" and conf < 0.50:
+                    elif label == "Damage" and conf < 0.85:
                         cls = 6
+                    elif label == "Slightly Damage" and conf < 0.55:
+                        cls = 6  # classify weak slightly-damaged predictions back to sound grain
                     results_list.append(cls)
     return results_list
 
