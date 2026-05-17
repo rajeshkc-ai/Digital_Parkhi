@@ -40,7 +40,7 @@ def analyze_sample(cv_img, model):
             tile = img[y:y2, x:x2]
             
             # Keep confidence functional baseline at 0.20 to capture small/obscured variants
-            preds = model.predict(tile, conf=0.20, verbose=False)
+            preds = model.predict(tile, conf=0.28, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
