@@ -24,7 +24,7 @@ def analyze_sample(cv_img, model):
     clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8,8))
     cl = clahe.apply(l)
     img = cv2.cvtColor(cv2.merge((cl, a, b)), cv2.COLOR_LAB2BGR)
-    
+    # 2. Slice Setup
     h, w, _ = img.shape
     slice_size = 640
     step = int(slice_size * 0.75) # 25% overlap
@@ -49,6 +49,9 @@ def analyze_sample(cv_img, model):
                     conf = float(box.conf[0])
                     label = CLASS_MAP.get(cls)
                     bw, bh = float(box.xywh[0][2]), float(box.xywh[0][3])
+                    # Create a final designation variable to protect the initial prediction data
+                    final_cls = cls
+                    
                     # Convert tile-relative coordinates back to global canvas scale coordinates
                     bx_c, by_c, bw, bh = map(float, box.xywh[0])
                     global_x = x + (bx_c - bw/2)
@@ -83,17 +86,17 @@ def analyze_sample(cv_img, model):
 
         # Apply corrections directly to the class labels
         if label == "Ergoty Damage":
-            if conf < 0.96 or (bw * bh) < 80 or (max(bw, bh) / (min(bw, bh) + 1e-6)) < 1.6:
+            if conf < 0.95 or (bw * bh) < 80 or (max(bw, bh) / (min(bw, bh) + 1e-6)) < 1.6:
                 label = "Sound Grain"
-        elif label == "Damage" and conf < 0.90:
+        elif label == "Damage" and conf < 0.88:
             label = "Sound Grain"
-        elif label == "Slightly Damage" and conf < 0.55:
+        elif label == "Slightly Damage" and conf < 0.50:
             label = "Sound Grain"
-        elif label == "Broken" and conf < 0.20:
-            # If the model is unsure about a broken piece, only discard if it's below 20%
-            label = "Sound Grain"
-        elif label == "Shrivelled" and conf < 0.22:
-            label = "Sound Grain"
+        # --- ZERO-LOSS PASS-THROUGH FOR GENUINE PHYSICAL DEFECTS ---
+        elif label in ["Broken", "Shrivelled"]:
+        # If the model explicitly called out Broken or Shrivelled, trust it!
+        # Do not allow boundary fluctuations to force it back to a whole Sound Grain.
+            label = cls
         # Append string representation directly to avoid dictionary lookup gaps
         final_labels_list.append(label)
 
