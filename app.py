@@ -61,16 +61,18 @@ elif st.session_state.page == 'upload':
                 # Read the file buffer directly into an OpenCV image matrix
                 img = cv2.imdecode(np.frombuffer(f.read(), np.uint8), 1)
                 
-                # FIXED: Passed 'img' instead of the undefined variable 'path'
-                # FIXED: Expected only a single returned list of strings from faq_logic.py
+                # Runs your sliced inference (which returns a list of class integer IDs)
                 preds = faq_logic.analyze_sample(img, model)
                 
                 grand_total += len(preds)
                 
-                # FIXED: Safely incrementing counts since 'preds' contains explicit string labels now
-                for label in preds:
-                    if label in master_counts:
-                        master_counts[label] += 1
+                # MAP THE INTEGERS TO STRINGS HERE USING CLASS_MAP
+                for p_idx in preds:
+                    # Translate integer ID (e.g., 0) to string label (e.g., 'Broken')
+                    string_label = faq_logic.CLASS_MAP.get(p_idx)
+                    
+                    if string_label in master_counts:
+                        master_counts[string_label] += 1
                         
                 file_stats.append(f"Processed {f.name}: {len(preds)} grains.")
 
