@@ -35,7 +35,7 @@ def analyze_sample(cv_img, model):
         for x in range(0, w, step):
             y2, x2 = min(y + slice_size, h), min(x + slice_size, w)
             tile = img[y:y2, x:x2]
-            preds = model.predict(tile, conf=0.25, verbose=False)
+            preds = model.predict(tile, conf=0.30, verbose=False)
             for r in preds:
                 for box in r.boxes:
                     cls = int(box.cls[0])
