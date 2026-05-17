@@ -82,12 +82,12 @@ def analyze_sample(cv_img, model):
                 label = "Sound Grain"
         elif label == "Damage" and conf < 0.90:
             label = "Sound Grain"
-        elif label == "Slightly Damage" and conf < 0.60:
+        elif label == "Slightly Damage" and conf < 0.55:
             label = "Sound Grain"
-        elif label == "Broken" and conf < 0.20:
+        elif label == "Broken" and conf < 0.35:
             # If the model is unsure about a broken piece, only discard if it's below 20%
             label = "Sound Grain"
-        elif label == "Shrivelled" and conf < 0.25:
+        elif label == "Shrivelled" and conf < 0.40:
             label = "Sound Grain"
         # Append string representation directly to avoid dictionary lookup gaps
         final_labels_list.append(label)
