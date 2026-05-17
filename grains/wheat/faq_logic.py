@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import torch  # Required for handling NMS coordinates efficiently
+import torch
 from fpdf import FPDF
 from datetime import datetime
 
@@ -40,7 +40,7 @@ def analyze_sample(cv_img, model):
             y2, x2 = min(y + slice_size, h), min(x + slice_size, w)
             tile = img[y:y2, x:x2]
             
-            # Use 0.15 baseline to ensure smaller broken pieces register on canvas edges
+            # Using 0.15 baseline ensures smaller fragments are registered
             preds = model.predict(tile, conf=0.15, verbose=False)
             
             for r in preds:
@@ -77,7 +77,7 @@ def analyze_sample(cv_img, model):
         x1, y1, x2, y2 = global_boxes[idx]
         bw, bh = x2 - x1, y2 - y1
 
-        # Apply safety overrides directly to string categories
+        # Apply strict safety overrides directly to string categories
         if label == "Ergoty Damage":
             if conf < 0.95 or (bw * bh) < 80 or (max(bw, bh) / (min(bw, bh) + 1e-6)) < 1.6:
                 label = "Sound Grain"
@@ -85,15 +85,8 @@ def analyze_sample(cv_img, model):
             label = "Sound Grain"
         elif label == "Slightly Damage" and conf < 0.50:
             label = "Sound Grain"
-        elif label in ["Broken", "Shrivelled"]:
-            # --- FIXED: REMOVED 'label = cls' TO PREVENT INTEGER OVERWRITING ---
-            # Keeps the string intact ("Broken" or "Shrivelled") so app.py can match it
-            pass 
-        else:
-            # --- FIXED: CATCH-ALL FOR FOREIGN MATTER & OTHER FOODGRAINS ---
-            # Ensures Foreign Matter (Class 3) passes through as a string category safely
-            pass
-
+        
+        # Let Broken, Shrivelled, and Foreign Matter pass through cleanly as explicit strings
         final_labels_list.append(label)
 
     return final_labels_list
