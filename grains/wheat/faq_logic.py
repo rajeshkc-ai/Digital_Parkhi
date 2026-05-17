@@ -24,41 +24,34 @@ def analyze_sample(cv_img, model):
     clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8,8))
     cl = clahe.apply(l)
     img = cv2.cvtColor(cv2.merge((cl, a, b)), cv2.COLOR_LAB2BGR)
+    
     # 2. Slice Setup
     h, w, _ = img.shape
     slice_size = 640
     step = int(slice_size * 0.75) # 25% overlap
-    results_list = []
     
     global_boxes = []
     global_confs = []
     global_classes = []
 
-    # 2. Slice Processing Loop
+    # Slicing Processing Loop
     for y in range(0, h, step):
         for x in range(0, w, step):
             y2, x2 = min(y + slice_size, h), min(x + slice_size, w)
             tile = img[y:y2, x:x2]
             
-            # Keep confidence functional baseline at 0.20 to capture small/obscured variants
+            # Use 0.15 baseline to ensure smaller broken pieces register on canvas edges
             preds = model.predict(tile, conf=0.15, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
                     cls = int(box.cls[0])
                     conf = float(box.conf[0])
-                    label = CLASS_MAP.get(cls)
-                    bw, bh = float(box.xywh[0][2]), float(box.xywh[0][3])
-                    # Create a final designation variable to protect the initial prediction data
-                    final_cls = cls
                     
                     # Convert tile-relative coordinates back to global canvas scale coordinates
                     bx_c, by_c, bw, bh = map(float, box.xywh[0])
                     global_x = x + (bx_c - bw/2)
                     global_y = y + (by_c - bh/2)
-                    
-                    cls = int(box.cls[0])
-                    conf = float(box.conf[0])
                     
                     global_boxes.append([global_x, global_y, global_x + bw, global_y + bh])
                     global_confs.append(conf)
@@ -67,24 +60,24 @@ def analyze_sample(cv_img, model):
     if not global_boxes:
         return []
 
-    # 3. Apply Global Non-Maximum Suppression to completely wipe out overlap duplicates
+    # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
     confs_t = torch.tensor(global_confs)
     keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.3)
 
     final_labels_list = []
     
-    # 4. Process deduplicated predictions through vigilance filters
+    # 4. Process deduplicated predictions through validation filters
     for idx in keep_indices:
         cls = global_classes[idx]
         conf = global_confs[idx]
         label = CLASS_MAP.get(cls)
         
-        # Calculate bounding dimensions from saved global coordinates
+        # Calculate bounding dimensions from global coordinates
         x1, y1, x2, y2 = global_boxes[idx]
         bw, bh = x2 - x1, y2 - y1
 
-        # Apply corrections directly to the class labels
+        # Apply safety overrides directly to string categories
         if label == "Ergoty Damage":
             if conf < 0.95 or (bw * bh) < 80 or (max(bw, bh) / (min(bw, bh) + 1e-6)) < 1.6:
                 label = "Sound Grain"
@@ -92,12 +85,12 @@ def analyze_sample(cv_img, model):
             label = "Sound Grain"
         elif label == "Slightly Damage" and conf < 0.50:
             label = "Sound Grain"
-        # --- ZERO-LOSS PASS-THROUGH FOR GENUINE PHYSICAL DEFECTS ---
+            
+        # --- FIXED: RETAIN THE TEXT LABELS INSTEAD OF CONVERTING TO INT ---
         elif label in ["Broken", "Shrivelled"]:
-        # If the model explicitly called out Broken or Shrivelled, trust it!
-        # Do not allow boundary fluctuations to force it back to a whole Sound Grain.
-            label = cls
-        # Append string representation directly to avoid dictionary lookup gaps
+            # Let explicit broken and shrivelled pieces pass through natively
+            pass 
+
         final_labels_list.append(label)
 
     return final_labels_list
