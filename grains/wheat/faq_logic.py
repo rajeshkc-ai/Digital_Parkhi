@@ -50,7 +50,7 @@ def analyze_sample(cv_img, model):
                     label = CLASS_MAP.get(cls)
                     bw, bh = float(box.xywh[0][2]), float(box.xywh[0][3])
                     # Convert tile-relative coordinates back to global canvas scale coordinates
-                    # bx_c, by_c, bw, bh = map(float, box.xywh[0])
+                    bx_c, by_c, bw, bh = map(float, box.xywh[0])
                     global_x = x + (bx_c - bw/2)
                     global_y = y + (by_c - bh/2)
                     
