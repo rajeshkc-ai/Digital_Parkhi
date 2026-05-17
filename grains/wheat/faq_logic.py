@@ -85,11 +85,14 @@ def analyze_sample(cv_img, model):
             label = "Sound Grain"
         elif label == "Slightly Damage" and conf < 0.50:
             label = "Sound Grain"
-            
-        # --- FIXED: RETAIN THE TEXT LABELS INSTEAD OF CONVERTING TO INT ---
         elif label in ["Broken", "Shrivelled"]:
-            # Let explicit broken and shrivelled pieces pass through natively
+            # --- FIXED: REMOVED 'label = cls' TO PREVENT INTEGER OVERWRITING ---
+            # Keeps the string intact ("Broken" or "Shrivelled") so app.py can match it
             pass 
+        else:
+            # --- FIXED: CATCH-ALL FOR FOREIGN MATTER & OTHER FOODGRAINS ---
+            # Ensures Foreign Matter (Class 3) passes through as a string category safely
+            pass
 
         final_labels_list.append(label)
 
