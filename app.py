@@ -51,22 +51,21 @@ elif st.session_state.page == 'upload':
     files = st.file_uploader("Upload Samples", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
     
     if st.button("Run Analysis") and files:
-        # Initializing counts using the explicit string names expected by the reporting system
+        # Initialize string keys exactly matching the values inside CLASS_MAP
         master_counts = {name: 0 for name in faq_logic.CLASS_MAP.values()}
         file_stats = []
         grand_total = 0
 
         with st.spinner("Applying Deep Scan (Slicing & Enhancement)..."):
             for f in files:
-                # Read the file buffer directly into an OpenCV image matrix
                 img = cv2.imdecode(np.frombuffer(f.read(), np.uint8), 1)
                 
-                # Fetch clean list of string categories from the pipeline
+                # Fetch text strings list straight from your NMS filter logic
                 preds = faq_logic.analyze_sample(img, model)
                 
                 grand_total += len(preds)
                 
-                # Directly increment matching text keys in master_counts
+                # CORRECTED: Direct string counting without looking up CLASS_MAP again
                 for label in preds:
                     if label in master_counts:
                         master_counts[label] += 1
