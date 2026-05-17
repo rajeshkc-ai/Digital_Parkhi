@@ -27,7 +27,8 @@ def analyze_sample(cv_img, model):
     
     h, w, _ = img.shape
     slice_size = 640
-    step = int(slice_size * 0.75) 
+    step = int(slice_size * 0.75) # 25% overlap
+    results_list = []
     
     global_boxes = []
     global_confs = []
@@ -40,12 +41,16 @@ def analyze_sample(cv_img, model):
             tile = img[y:y2, x:x2]
             
             # Keep confidence functional baseline at 0.20 to capture small/obscured variants
-            preds = model.predict(tile, conf=0.28, verbose=False)
+            preds = model.predict(tile, conf=0.15, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
+                    cls = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    label = CLASS_MAP.get(cls)
+                    bw, bh = float(box.xywh[0][2]), float(box.xywh[0][3])
                     # Convert tile-relative coordinates back to global canvas scale coordinates
-                    bx_c, by_c, bw, bh = map(float, box.xywh[0])
+                    # bx_c, by_c, bw, bh = map(float, box.xywh[0])
                     global_x = x + (bx_c - bw/2)
                     global_y = y + (by_c - bh/2)
                     
@@ -84,10 +89,10 @@ def analyze_sample(cv_img, model):
             label = "Sound Grain"
         elif label == "Slightly Damage" and conf < 0.55:
             label = "Sound Grain"
-        elif label == "Broken" and conf < 0.35:
+        elif label == "Broken" and conf < 0.20:
             # If the model is unsure about a broken piece, only discard if it's below 20%
             label = "Sound Grain"
-        elif label == "Shrivelled" and conf < 0.40:
+        elif label == "Shrivelled" and conf < 0.22:
             label = "Sound Grain"
         # Append string representation directly to avoid dictionary lookup gaps
         final_labels_list.append(label)
