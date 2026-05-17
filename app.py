@@ -2,7 +2,7 @@ import streamlit as st
 import cv2
 import numpy as np
 from ultralytics import YOLO
-from grains.wheat import faq_logic # IMPORTING YOUR LOGIC FILE
+from grains.wheat import faq_logic
 from datetime import datetime
 
 st.set_page_config(page_title="Digital Parkhi", page_icon="🌾", layout="wide")
@@ -51,22 +51,22 @@ elif st.session_state.page == 'upload':
     files = st.file_uploader("Upload Samples", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
     
     if st.button("Run Analysis") and files:
-        # Initialize dictionary keys exactly as text strings
+        # Initializing counts using the explicit string names expected by the reporting system
         master_counts = {name: 0 for name in faq_logic.CLASS_MAP.values()}
         file_stats = []
         grand_total = 0
 
         with st.spinner("Applying Deep Scan (Slicing & Enhancement)..."):
             for f in files:
-                # Read file buffer safely into an OpenCV matrix
+                # Read the file buffer directly into an OpenCV image matrix
                 img = cv2.imdecode(np.frombuffer(f.read(), np.uint8), 1)
                 
-                # Fetch text strings list straight from your updated NMS filter logic
+                # Fetch clean list of string categories from the pipeline
                 preds = faq_logic.analyze_sample(img, model)
                 
                 grand_total += len(preds)
                 
-                # --- FIXED: COUNT THE TEXT STRINGS DIRECTLY ---
+                # Directly increment matching text keys in master_counts
                 for label in preds:
                     if label in master_counts:
                         master_counts[label] += 1
