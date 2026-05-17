@@ -51,29 +51,40 @@ elif st.session_state.page == 'upload':
     files = st.file_uploader("Upload Samples", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
     
     if st.button("Run Analysis") and files:
-        class_names = ['Broken', 'Damage', 'Ergoty Damage', 'Foreign Matter', 'Shrivelled', 'Slightly Damage', 'Sound Grain']
+        # Initializing counts using the exact string names expected by the reporting system
         master_counts = {name: 0 for name in faq_logic.CLASS_MAP.values()}
         file_stats = []
         grand_total = 0
 
         with st.spinner("Applying Deep Scan (Slicing & Enhancement)..."):
             for f in files:
+                # Read the file buffer directly into an OpenCV image matrix
                 img = cv2.imdecode(np.frombuffer(f.read(), np.uint8), 1)
-                # preds = faq_logic.analyze_sample(img, model)
-                preds, status = faq_logic.analyze_sample(path, model)
+                
+                # FIXED: Passed 'img' instead of the undefined variable 'path'
+                # FIXED: Expected only a single returned list of strings from faq_logic.py
+                preds = faq_logic.analyze_sample(img, model)
+                
                 grand_total += len(preds)
-                for p_idx in preds:
-                    master_counts[faq_logic.CLASS_MAP[p_idx]] += 1
+                
+                # FIXED: Safely incrementing counts since 'preds' contains explicit string labels now
+                for label in preds:
+                    if label in master_counts:
+                        master_counts[label] += 1
+                        
                 file_stats.append(f"Processed {f.name}: {len(preds)} grains.")
 
         # Determine Status
         rej_reasons = []
         report_lines = []
         for cat, limit in faq_logic.WHEAT_NORMS.items():
-            if cat == 'Shrivelled & Broken':
-                val = ((master_counts['Shrivelled'] + master_counts['Broken']) / grand_total * 100)
+            if grand_total > 0:
+                if cat == 'Shrivelled & Broken':
+                    val = ((master_counts.get('Shrivelled', 0) + master_counts.get('Broken', 0)) / grand_total * 100)
+                else:
+                    val = (master_counts.get(cat, 0) / grand_total * 100)
             else:
-                val = (master_counts.get(cat, 0) / grand_total * 100)
+                val = 0.0
             
             status = "OK"
             if val > limit:
