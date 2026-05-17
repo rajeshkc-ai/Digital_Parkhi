@@ -59,8 +59,8 @@ elif st.session_state.page == 'upload':
         with st.spinner("Applying Deep Scan (Slicing & Enhancement)..."):
             for f in files:
                 img = cv2.imdecode(np.frombuffer(f.read(), np.uint8), 1)
-                preds = faq_logic.analyze_sample(img, model)
-                
+                # preds = faq_logic.analyze_sample(img, model)
+                preds, status = faq_logic.analyze_sample(path, model)
                 grand_total += len(preds)
                 for p_idx in preds:
                     master_counts[faq_logic.CLASS_MAP[p_idx]] += 1
