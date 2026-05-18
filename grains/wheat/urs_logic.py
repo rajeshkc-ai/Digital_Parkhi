@@ -83,11 +83,16 @@ def analyze_sample(cv_img, model):
 
         # Apply strict safety overrides directly to string categories
         if label == "Ergoty Damage":
-            if conf < 0.95 or (bw * bh) < 80 or (max(bw, bh) / (min(bw, bh) + 1e-6)) < 1.6:
+            # Highly distinct shape (mAP50: 0.960). Relaxed confidence filter from 0.95 to 0.75
+            if conf < 0.75 or (bw * bh) < 80 or (max(bw, bh) / (min(bw, bh) + 1e-6)) < 1.6:
                 label = "Sound Grain"
-        elif label == "Damage" and conf < 0.88:
+                
+        elif label == "Damage" and conf < 0.50:
+            # Strong performance baseline. Lowered block limit from 0.88 to 0.50 to accept clear classifications
             label = "Sound Grain"
-        elif label == "Slightly Damage" and conf < 0.50:
+            
+        elif label == "Slightly Damage" and conf < 0.35:
+            # Lower model recall (0.670). Reduced limit from 0.50 to 0.35 so subtle blemishes aren't missed
             label = "Sound Grain"
         
         # Let Broken, Shrivelled, and Foreign Matter pass through cleanly as explicit strings
