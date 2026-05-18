@@ -14,21 +14,6 @@ WHEAT_NORMS = {
     'Shrivelled & Broken': 6.00
 }
 
-# 🔴 URS SPECIFICATIONS RMS 2026-27
-WHEAT_URS_NORMS = {
-    'Foreign Matter': 0.75,
-    'Other Foodgrains': 2.0,
-    'Damage': 2.0,            # Individual base limits remain, but joint limit checked in app.py
-    'Slightly Damage': 4.0,   
-    'Ergoty Damage': 0.05,
-    'Shrivelled & Broken': 15.00,     # Relaxed from 6.0% to 15%
-    'Damage & Slightly Damage': 6.00,
-    'Lustre Loss': 70.00    # New relaxed criteria up to 70%
-}
-
-RICE_RRC_NORMS = { ... }
-RICE_RBC_NORMS = { ... }
-
 CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
              4: 'Shrivelled', 5: 'Slightly Damage', 6: 'Sound Grain'}
 
