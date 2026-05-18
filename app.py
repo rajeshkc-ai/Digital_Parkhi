@@ -75,23 +75,45 @@ elif st.session_state.page == 'upload':
                         
                 file_stats.append(f"Processed {f.name}: {len(preds)} grains.")
 
-        # Determine Status
+        # --- DYNAMIC QUALITY NORMS SELECTION ---
         rej_reasons = []
         report_lines = []
         
-        for cat, limit in faq_logic.WHEAT_NORMS.items():
-            # Standardize string checking by stripping whitespace
-            clean_cat = cat.strip()
+        # 1. Determine which norms dictionary to use based on Grain + Category selection
+        active_norms = {}
+        grade_label = st.session_state.cat  # Stores FAQ, URS, RRC, or RBC
+        
+        if st.session_state.grain == "Wheat":
+            if grade_label == "URS":
+                # Check if WHEAT_URS_NORMS exists in faq_logic, otherwise fallback safely
+                active_norms = getattr(faq_logic, 'WHEAT_URS_NORMS', faq_logic.WHEAT_NORMS)
+            else:
+                active_norms = faq_logic.WHEAT_NORMS
+                
+        elif st.session_state.grain == "Rice":
+            if grade_label == "RBC":
+                active_norms = getattr(faq_logic, 'RICE_RBC_NORMS', {})
+            else:
+                active_norms = getattr(faq_logic, 'RICE_RRC_NORMS', {})
+        
+        # Fallback security if a dictionary hasn't been defined in your logic file yet
+        if not active_norms:
+            st.error(f"Quality specifications dictionary for {st.session_state.grain} ({grade_label}) is missing in faq_logic.py!")
+            st.stop()
+
+        # 2. Dynamic Evaluation Loop
+        for cat, limit in active_norms.items():
+            current_category = cat.strip()
             
             if grand_total > 0:
-                if clean_cat == 'Shrivelled & Broken':
-                    # Explicitly fetch individual string components from master_counts
+                # Wheat Combined Category Logic
+                if st.session_state.grain == "Wheat" and current_category == 'Shrivelled & Broken':
                     shrivelled_count = master_counts.get('Shrivelled', 0)
                     broken_count = master_counts.get('Broken', 0)
                     val = ((shrivelled_count + broken_count) / grand_total) * 100
                 else:
-                    # Safely look up the exact category name
-                    val = (master_counts.get(clean_cat, 0) / grand_total) * 100
+                    # Generic lookup for standalone categories across Wheat and Rice
+                    val = (master_counts.get(current_category, 0) / grand_total) * 100
             else:
                 val = 0.0
             
@@ -101,11 +123,12 @@ elif st.session_state.page == 'upload':
                 rej_reasons.append(cat)
             report_lines.append(f"{cat.ljust(18)} : {val:5.2f}% | Limit: {limit:4}% | {status}")
 
-        final_status = "REJECTED" if rej_reasons else "ACCEPTED (FAQ)"
+        # 3. Dynamic Status Formatting
+        final_status = "REJECTED" if rej_reasons else f"ACCEPTED ({grade_label})"
 
-        # Display Terminal Output
-        output_txt = "--- STARTING ANALYSIS ---\n" + "\n".join(file_stats)
-        output_txt += "\n\n" + "="*50 + "\nFCI AGGREGATED QC REPORT (RMS 2025-26)\n" + "="*50
+        # Display Dynamic Terminal Output
+        output_txt = f"--- STARTING {st.session_state.grain.upper()} ANALYSIS ---\n" + "\n".join(file_stats)
+        output_txt += "\n\n" + "="*50 + f"\nFCI AGGREGATED QC REPORT (RMS 2025-26) - {grade_label}\n" + "="*50
         output_txt += f"\nTOTAL GRAINS SCANNED : {grand_total}\n" + "-"*50 + "\n"
         output_txt += "\n".join(report_lines) + "\n" + "-"*50
         output_txt += f"\nFINAL STATUS: {final_status}\n" + "="*50
