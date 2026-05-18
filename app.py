@@ -76,11 +76,18 @@ elif st.session_state.page == 'upload':
         rej_reasons = []
         report_lines = []
         for cat, limit in faq_logic.WHEAT_NORMS.items():
+            # Standardize string checking by stripping whitespace
+            clean_cat = cat.strip()
+            
             if grand_total > 0:
-                if cat == 'Shrivelled & Broken':
-                    val = ((master_counts.get('Shrivelled', 0) + master_counts.get('Broken', 0)) / grand_total * 100)
+                if clean_cat == 'Shrivelled & Broken':
+                    # Explicitly fetch individual string components from master_counts
+                    shrivelled_count = master_counts.get('Shrivelled', 0)
+                    broken_count = master_counts.get('Broken', 0)
+                    val = ((shrivelled_count + broken_count) / grand_total) * 100
                 else:
-                    val = (master_counts.get(cat, 0) / grand_total * 100)
+                    # Safely look up the exact category name
+                    val = (master_counts.get(clean_cat, 0) / grand_total) * 100
             else:
                 val = 0.0
             
