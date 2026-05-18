@@ -8,7 +8,7 @@ from datetime import datetime
 from grains.wheat import faq_logic
 from grains.wheat import urs_logic
 from grains.rice import rrc_logic
-from grains.rice import rbc_logic
+from grains.rice import rba_logic
 
 st.set_page_config(page_title="Digital Parkhi", page_icon="🌾", layout="wide")
 
