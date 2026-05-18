@@ -63,6 +63,9 @@ elif st.session_state.page == 'upload':
                 # Fetch text strings list straight from your NMS filter logic
                 preds = faq_logic.analyze_sample(img, model)
                 
+                # 🔴 TEMPORARY DEBUG LINE
+                st.write(f"Raw labels found in {f.name}: {set(preds)}")
+                
                 grand_total += len(preds)
                 
                 # CORRECTED: Direct string counting without looking up CLASS_MAP again
