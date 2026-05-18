@@ -1,3 +1,8 @@
+RICE_FRK_NORMS = { ... }
+RICE_RBA_NORMS = { ... }
+RICE_RRA_NORMS = { ... }
+RICE_RRC_NORMS = { ... }
+
 def analyze_frk(images, model):
     """
     Special logic for FRK (Fortified Rice Kernels) RBC/RBA.
