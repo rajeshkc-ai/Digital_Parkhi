@@ -78,6 +78,7 @@ elif st.session_state.page == 'upload':
         # Determine Status
         rej_reasons = []
         report_lines = []
+        
         for cat, limit in faq_logic.WHEAT_NORMS.items():
             # Standardize string checking by stripping whitespace
             clean_cat = cat.strip()
