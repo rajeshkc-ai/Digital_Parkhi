@@ -16,6 +16,7 @@ WHEAT_NORMS = {
 CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
              4: 'Shrivelled', 5: 'Slightly Damage', 6: 'Sound Grain'}
 
+
 def analyze_sample(cv_img, model):
     """Performs CLAHE enhancement and Sliced Inference with global NMS tracking"""
     # 1. Enhance Contrast safely
