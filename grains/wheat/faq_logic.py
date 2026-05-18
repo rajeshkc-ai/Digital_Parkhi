@@ -4,6 +4,7 @@ import torch
 from fpdf import FPDF
 from datetime import datetime
 
+# 🔴 FAQ SPECIFICATIONS RMS 2026-27
 WHEAT_NORMS = {
     'Foreign Matter': 0.75,
     'Other Foodgrains': 2.0,
@@ -12,6 +13,19 @@ WHEAT_NORMS = {
     'Ergoty Damage': 0.05,
     'Shrivelled & Broken': 6.00
 }
+
+# 🔴 URS SPECIFICATIONS RMS 2026-27
+WHEAT_URS_NORMS = {
+    'Foreign Matter': 0.75,
+    'Other Foodgrains': 2.0,
+    'Damage': 2.0,            
+    'Slightly Damage': 4.0,   
+    'Ergoty Damage': 0.05,
+    'Shrivelled & Broken': 15.00, # Relaxed from 6.0%
+    'Damage & Slightly Damage': 6.00,
+    'Lusture Loss': 70.00
+}
+
 
 CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
              4: 'Shrivelled', 5: 'Slightly Damage', 6: 'Sound Grain'}
