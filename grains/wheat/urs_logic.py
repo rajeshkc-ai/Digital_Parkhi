@@ -16,9 +16,6 @@ WHEAT_URS_NORMS = {
     'Lustre Loss': 70.00    # New relaxed criteria up to 70%
 }
 
-RICE_RRC_NORMS = { ... }
-RICE_RBC_NORMS = { ... }
-
 CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
              4: 'Shrivelled', 5: 'Slightly Damage', 6: 'Sound Grain'}
 
