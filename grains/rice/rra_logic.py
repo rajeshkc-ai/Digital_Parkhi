@@ -19,6 +19,10 @@ def analyze_rra(images, model):
         'Chalky': 3.0
     }
 
+    RICE_FRK_NORMS = { ... }
+    RICE_RBA_NORMS = { ... }
+    RICE_RRA_NORMS = { ... }
+    RICE_RRC_NORMS = { ... }
     for img in images:
         results = model.predict(img, conf=0.25, verbose=False)
         for r in results:
