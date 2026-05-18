@@ -79,49 +79,64 @@ elif st.session_state.page == 'upload':
         rej_reasons = []
         report_lines = []
         
-        # 1. Determine which norms dictionary to use based on Grain + Category selection
-        active_norms = {}
         grade_label = st.session_state.cat  # Stores FAQ, URS, RRC, or RBC
+        active_norms = {}
         
         if st.session_state.grain == "Wheat":
             if grade_label == "URS":
-                # Check if WHEAT_URS_NORMS exists in faq_logic, otherwise fallback safely
                 active_norms = getattr(faq_logic, 'WHEAT_URS_NORMS', faq_logic.WHEAT_NORMS)
             else:
                 active_norms = faq_logic.WHEAT_NORMS
-                
         elif st.session_state.grain == "Rice":
             if grade_label == "RBC":
                 active_norms = getattr(faq_logic, 'RICE_RBC_NORMS', {})
             else:
                 active_norms = getattr(faq_logic, 'RICE_RRC_NORMS', {})
         
-        # Fallback security if a dictionary hasn't been defined in your logic file yet
         if not active_norms:
-            st.error(f"Quality specifications dictionary for {st.session_state.grain} ({grade_label}) is missing in faq_logic.py!")
+            st.error(f"Quality specifications dictionary for {st.session_state.grain} ({grade_label}) is missing!")
             st.stop()
 
-        # 2. Dynamic Evaluation Loop
+        # Pre-calculate percentage values for combined checking strings
+        damage_pct = (master_counts.get('Damage', 0) / grand_total * 100) if grand_total > 0 else 0.0
+        slightly_damage_pct = (master_counts.get('Slightly Damage', 0) / grand_total * 100) if grand_total > 0 else 0.0
+        combined_damage_pct = damage_pct + slightly_damage_pct
+
+        # Run Evaluation Loop
         for cat, limit in active_norms.items():
             current_category = cat.strip()
             
             if grand_total > 0:
-                # Wheat Combined Category Logic
                 if st.session_state.grain == "Wheat" and current_category == 'Shrivelled & Broken':
                     shrivelled_count = master_counts.get('Shrivelled', 0)
                     broken_count = master_counts.get('Broken', 0)
                     val = ((shrivelled_count + broken_count) / grand_total) * 100
                 else:
-                    # Generic lookup for standalone categories across Wheat and Rice
                     val = (master_counts.get(current_category, 0) / grand_total) * 100
             else:
                 val = 0.0
             
             status = "OK"
-            if val > limit:
-                status = "!! EXCEEDS LIMIT !!"
-                rej_reasons.append(cat)
+            
+            # --- SPECIAL CONDITIONS CHECKER ---
+            if grade_label == "URS" and st.session_state.grain == "Wheat" and current_category in ['Damage', 'Slightly Damage']:
+                # For individual lines in URS, display the standard entry but flag if the joint group totals > 6%
+                if combined_damage_pct > 6.0:
+                    status = "!! COMBINED LIMIT EXCEEDED (>6%) !!"
+                    if "Damage + Slightly Damage Combined" not in rej_reasons:
+                        rej_reasons.append("Damage + Slightly Damage Combined")
+            else:
+                # Standard threshold checking rule
+                if val > limit:
+                    status = "!! EXCEEDS LIMIT !!"
+                    rej_reasons.append(cat)
+                    
             report_lines.append(f"{cat.ljust(18)} : {val:5.2f}% | Limit: {limit:4}% | {status}")
+
+        # Add an explicit breakdown row for the combined damages rule under URS print views
+        if grade_label == "URS" and st.session_state.grain == "Wheat":
+            combined_status = "!! EXCEEDS LIMIT !!" if combined_damage_pct > 6.0 else "OK"
+            report_lines.append(f"{'Damage Total (Joint)'.ljust(18)} : {combined_damage_pct:5.2f}% | Limit:  6.0% | {combined_status}")
 
         # 3. Dynamic Status Formatting
         final_status = "REJECTED" if rej_reasons else f"ACCEPTED ({grade_label})"
