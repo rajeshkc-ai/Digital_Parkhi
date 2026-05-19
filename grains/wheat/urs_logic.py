@@ -8,9 +8,6 @@ from datetime import datetime
 WHEAT_URS_NORMS = {
     'Foreign Matter': 0.75,
     'Other Foodgrains': 2.0,
-    'Damage': 2.0,            # Individual base limits remain, but joint limit checked in app.py
-    'Slightly Damage': 4.0,   
-    'Ergoty Damage': 0.05,
     'Shrivelled & Broken': 15.00,     # Relaxed from 6.0% to 15%
     'Damage & Slightly Damage': 6.00,
     'Lustre Loss': 70.00    # New relaxed criteria up to 70%
@@ -122,18 +119,35 @@ def generate_faq_pdf(total, counts, final_status):
     pdf.cell(40, 10, " Status", 1, 1, 'C', True)
 
     pdf.set_font("Arial", '', 10)
+    
+    # Pre-calculate joint metrics for row evaluations
+    damage_pct = (counts.get('Damage', 0) / total * 100) if total > 0 else 0.0
+    slightly_damage_pct = (counts.get('Slightly Damage', 0) / total * 100) if total > 0 else 0.0
+    combined_damage_pct = damage_pct + slightly_damage_pct
+    # Loop through specifications sequentially
     for cat, limit in WHEAT_URS_NORMS.items():
         if cat == 'Shrivelled & Broken':
             val = ((counts.get('Shrivelled', 0) + counts.get('Broken', 0)) / total * 100) if total > 0 else 0
         else:
             val = (counts.get(cat, 0) / total * 100) if total > 0 else 0
+        # Determine status flag cleanly based on joint URS parameters
+        if cat in ['Damage', 'Slightly Damage']:
+            status = "FAIL" if combined_damage_pct > 6.0 else "OK"
+        else:
+            status = "OK" if val <= limit else "FAIL"
         
-        status = "OK" if val <= limit else "FAIL"
         pdf.cell(60, 10, f" {cat}", 1)
         pdf.cell(40, 10, f"{val:.2f}%", 1, 0, 'C')
         pdf.cell(40, 10, f"{limit}%", 1, 0, 'C')
         pdf.cell(40, 10, status, 1, 1, 'C')
 
+    # Add the structural breakdown line for the joint limit row matching the app screen
+    joint_row_status = "FAIL" if combined_damage_pct > 6.0 else "OK"
+    pdf.cell(60, 10, " Damage Total (Joint)", 1)
+    pdf.cell(40, 10, f"{combined_damage_pct:.2f}%", 1, 0, 'C')
+    pdf.cell(40, 10, "6.00%", 1, 0, 'C')
+    pdf.cell(40, 10, joint_row_status, 1, 1, 'C')
+    
     pdf.ln(10)
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(0, 15, f"FINAL RESULT: {final_status}", border=1, ln=True, align='C')
