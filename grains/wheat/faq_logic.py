@@ -43,7 +43,7 @@ def analyze_sample(cv_img, model):
             tile = img[y:y2, x:x2]
             
             # Using 0.15 baseline ensures smaller fragments are registered
-            preds = model.predict(tile, conf=0.15, verbose=False)
+            preds = model.predict(tile, conf=0.10, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
@@ -65,7 +65,7 @@ def analyze_sample(cv_img, model):
     # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
     confs_t = torch.tensor(global_confs)
-    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.3)
+    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.45)
 
     final_labels_list = []
     
@@ -85,7 +85,7 @@ def analyze_sample(cv_img, model):
             if conf < 0.75 or (bw * bh) < 80 or (max(bw, bh) / (min(bw, bh) + 1e-6)) < 1.6:
                 label = "Sound Grain"
                 
-        elif label == "Damage" and conf < 0.82:
+        elif label == "Damage" and conf < 0.80:
             # Strong performance baseline. Lowered block limit from 0.88 to 0.50 to accept clear classifications
             label = "Sound Grain"
             
