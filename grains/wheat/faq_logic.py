@@ -78,18 +78,25 @@ def analyze_sample(cv_img, model):
         # Calculate bounding dimensions from global coordinates
         x1, y1, x2, y2 = global_boxes[idx]
         bw, bh = x2 - x1, y2 - y1
+        box_area = bw * bh
+        
+        # ⭐ SHIELD 1: Force Shrivelled and Broken to pass through instantly.
+        # No confidence overrides, no size filters can touch them.
+        if label in ["Shrivelled", "Broken", "Foreign Matter"]:
+            final_labels_list.append(label)
+            continue  # Skip all other checks and move to the next grain immediately
 
         # Apply strict safety overrides directly to string categories
         if label == "Ergoty Damage":
             # Highly distinct shape (mAP50: 0.960). Relaxed confidence filter from 0.95 to 0.75
-            if conf < 0.75 or (bw * bh) < 80 or (max(bw, bh) / (min(bw, bh) + 1e-6)) < 1.6:
+            if conf < 0.75 or box_area < 80 or (max(bw, bh) / (min(bw, bh) + 1e-6)) < 1.4:
                 label = "Sound Grain"
                 
         elif label == "Damage" and conf < 0.80:
             # Strong performance baseline. Lowered block limit from 0.88 to 0.50 to accept clear classifications
             label = "Sound Grain"
             
-        elif label == "Slightly Damage" and conf < 0.35:
+        elif label == "Slightly Damage" and conf < 0.30:
             # Lower model recall (0.670). Reduced limit from 0.50 to 0.35 so subtle blemishes aren't missed
             label = "Sound Grain"
         
