@@ -102,9 +102,9 @@ def generate_faq_pdf(total, counts, final_status):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, "Digital Parkhi 2.0: Official FAQ QC Report", ln=True, align='C')
+    pdf.cell(0, 10, "Digital Parkhi: Official URS QC Report", ln=True, align='C')
     pdf.set_font("Arial", '', 10)
-    pdf.cell(0, 10, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align='C')
+    pdf.cell(0, 10, f"Generated: {datetime.now().strftime('%d-%m-%Y %H:%M')}", ln=True, align='C')
     pdf.ln(10)
 
     pdf.set_font("Arial", 'B', 12)
