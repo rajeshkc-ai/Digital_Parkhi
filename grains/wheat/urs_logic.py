@@ -143,7 +143,7 @@ def generate_faq_pdf(total, counts, final_status):
 
     # Add the structural breakdown line for the joint limit row matching the app screen
     joint_row_status = "FAIL" if combined_damage_pct > 6.0 else "OK"
-    pdf.cell(60, 10, " Damage Total (Joint)", 1)
+    pdf.cell(60, 10, "Damage & Slightly Damage (Joint)", 1)
     pdf.cell(40, 10, f"{combined_damage_pct:.2f}%", 1, 0, 'C')
     pdf.cell(40, 10, "6.00%", 1, 0, 'C')
     pdf.cell(40, 10, joint_row_status, 1, 1, 'C')
