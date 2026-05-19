@@ -143,7 +143,7 @@ elif st.session_state.page == 'upload':
         # Insert a visual joint matrix helper row into the terminal text for tracking clarity
         if grain_type == "Wheat" and grade_label == "URS":
             joint_status = "!! EXCEEDS LIMIT !!" if combined_damage_pct > 6.0 else "OK"
-            report_lines.append(f"{'Damage Total (Joint)'.ljust(18)} : {combined_damage_pct:5.2f}% | Limit:  6.00% | {joint_status}")
+            report_lines.append(f"{'Damage & Slightly Damage'.ljust(18)} : {combined_damage_pct:5.2f}% | Limit:  6.00% | {joint_status}")
 
         final_status = "REJECTED" if rej_reasons else f"ACCEPTED ({grade_label})"
 
