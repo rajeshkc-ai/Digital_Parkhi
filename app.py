@@ -53,7 +53,7 @@ elif st.session_state.page == 'select_cat':
 
 elif st.session_state.page == 'upload':
     st.header(f"Deep Scanning: {st.session_state.grain} ({st.session_state.cat})")
-    files = st.file_uploader("Upload 3 image of 50 gm Samples (Note: Please spread grain on white A4 paper in such a way that no grain touches each other", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
+    files = st.file_uploader("Upload atleast 3 images of 50 gm Sample (Note: Please spread grain on white A4 paper in such a way that no grain touches each other)", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
     
     if st.button("Run Analysis") and files:
         grain_type = st.session_state.grain
