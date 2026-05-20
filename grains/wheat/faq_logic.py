@@ -69,6 +69,17 @@ def analyze_sample(cv_img, model):
 
     final_labels_list = []
     
+    # Color map for beautiful boxes (B, G, R format for OpenCV)
+    COLOR_MAP = {
+        'Sound Grain': (0, 255, 0),        # Green
+        'Damage': (0, 0, 255),             # Red
+        'Slightly Damage': (0, 165, 255),  # Orange
+        'Shrivelled': (255, 255, 0),       # Cyan / Yellow-Blue
+        'Broken': (255, 0, 255),           # Magenta
+        'Foreign Matter': (0, 255, 255),   # Yellow
+        'Ergoty Damage': (0, 0, 0)         # Black
+    }
+    
     # 4. Process deduplicated predictions through validation filters
     for idx in keep_indices:
         cls = global_classes[idx]
@@ -79,6 +90,7 @@ def analyze_sample(cv_img, model):
         x1, y1, x2, y2 = global_boxes[idx]
         bw, bh = x2 - x1, y2 - y1
         box_area = bw * bh
+        aspect_ratio = max(bw, bh) / (min(bw, bh) + 1e-6)
         
         # ⭐ SHIELD 1: Force Shrivelled and Broken to pass through instantly.
         # No confidence overrides, no size filters can touch them.
@@ -95,15 +107,29 @@ def analyze_sample(cv_img, model):
         elif label == "Damage" and conf < 0.75:
             # Strong performance baseline. Lowered block limit from 0.88 to 0.50 to accept clear classifications
             label = "Sound Grain"
+            elif aspect_ratio > 1.35 and conf < 0.88:
+                label = "Sound Grain"
                        
         elif label == "Slightly Damage" and conf < 0.30:
             # Lower model recall (0.670). Reduced limit from 0.50 to 0.30 so subtle blemishes aren't missed
             label = "Sound Grain"
+            
         
         # Let Broken, Shrivelled, and Foreign Matter pass through cleanly as explicit strings
         final_labels_list.append(label)
-
-    return final_labels_list
+    
+        # 🎨 DRAW BOXES ON THE FULL-SIZE IMAGE
+        color = COLOR_MAP.get(label, (255, 255, 255)) # Default white if fallback
+        ix1, iy1, ix2, iy2 = map(int, [x1, y1, x2, y2])
+        
+        # Draw bounding box rectangle
+        cv2.rectangle(annotated_img, (ix1, iy1), (ix2, iy2), color, 2)
+        
+        # Add label text right above the box
+        text_str = f"{label} {conf:.2f}"
+        cv2.putText(annotated_img, text_str, (ix1, max(iy1 - 5, 15)), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+    return final_labels_list, annotated_img
 
 def generate_faq_pdf(total, counts, final_status):
     """Generates the bytes for the PDF report"""
