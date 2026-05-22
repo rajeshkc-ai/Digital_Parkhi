@@ -101,40 +101,40 @@ def classify_grain(cnt, roi_gray):
 
     return 'Sound Grain'
 # =========================================================
-        if label is None:
-            continue
+    if label is None:
+        continue
 
-        labels.append(label)
+    labels.append(label)
 
-        # Draw box
-        color = (0, 255, 0)
+    # Draw box
+    color = (0, 255, 0)
 
-        if label == 'Broken':
-            color = (255, 0, 255)
+    if label == 'Broken':
+        color = (255, 0, 255)
 
-        elif label == 'Shrivelled':
-            color = (0, 255, 255)
+    elif label == 'Shrivelled':
+        color = (0, 255, 255)
 
-        elif label == 'Lustre Loss':
-            color = (255, 255, 255)
+    elif label == 'Lustre Loss':
+        color = (255, 255, 255)
 
-        cv2.rectangle(
-            annotated,
-            (x, y),
-            (x + w, y + h),
-            color,
-            2
-        )
+    cv2.rectangle(
+        annotated,
+        (x, y),
+        (x + w, y + h),
+        color,
+        2
+    )
 
-        cv2.putText(
-            annotated,
-            label,
-            (x, y - 5),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.4,
-            color,
-            1
-        )
+    cv2.putText(
+        annotated,
+        label,
+        (x, y - 5),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.4,
+        color,
+        1
+    )
 
     return labels, annotated
 
