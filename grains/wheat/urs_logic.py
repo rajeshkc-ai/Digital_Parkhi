@@ -14,7 +14,7 @@ WHEAT_URS_NORMS = {
 }
 
 CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
-             4: 'Shrivelled', 5: 'Slightly Damage', 6: 'Sound Grain'}
+             4: 'Shrivelled', 5: 'Slightly Damage', 6: 'Sound Grain', 7: 'Lustre Loss'}
 
 
 def analyze_sample(cv_img, model):
