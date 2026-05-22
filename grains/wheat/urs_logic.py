@@ -177,7 +177,14 @@ def analyze_sample(cv_img, model=None):
 
         roi_gray = gray[y:y+h, x:x+w]
 
-        label = classify_grain(cnt, roi_gray)
+        
+        roi_bgr = cv_img[y:y+h, x:x+w]
+
+        label = classify_grain(
+            cnt,
+            roi_bgr,
+            roi_gray
+        )
 
         if label is None:
             continue
