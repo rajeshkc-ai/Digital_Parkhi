@@ -100,7 +100,7 @@ def analyze_sample(cv_img, model):
         # Apply strict confidence filters to keep classes honest
         if label == "Shrivelled" and conf < 0.75:
             label = "Sound Grain"
-        elif label == "Broken" and (conf < 0.55 or box_area > 180):
+        elif label == "Broken" and (conf < 0.65 or box_area > 180):
             label = "Sound Grain"
         elif label == "Slightly Damage" and conf < 0.45:
             label = "Sound Grain"
