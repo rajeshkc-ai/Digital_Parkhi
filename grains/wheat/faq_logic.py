@@ -107,7 +107,7 @@ def analyze_sample(cv_img, model):
         elif label == "Damage" and conf < 0.75:
             # Strong performance baseline. Lowered block limit from 0.88 to 0.50 to accept clear classifications
             label = "Sound Grain"
-            elif aspect_ratio > 1.35 and conf < 0.88:
+            if aspect_ratio > 1.35 and conf < 0.88:
                 label = "Sound Grain"
                        
         elif label == "Slightly Damage" and conf < 0.30:
