@@ -96,15 +96,18 @@ def analyze_sample(cv_img, model):
         box_area = bw * bh
         aspect_ratio = max(bw, bh) / (min(bw, bh) + 1e-6)
         
-        # ⭐ SHIELD 1: Force Shrivelled and Broken to pass through instantly.
-        # No confidence overrides, no size filters can touch them.
+        
         # Apply strict confidence filters to keep classes honest
-        if label == "Shrivelled" and conf < 0.55:
+        if label == "Shrivelled" and conf < 0.75:
             label = "Sound Grain"
-        elif label == "Broken" and (conf < 0.60 or box_area > 180):
+        elif label == "Broken" and (conf < 0.55 or box_area > 180):
             label = "Sound Grain"
-        elif label == "Slightly Damage" and conf < 0.50:
+        elif label == "Slightly Damage" and conf < 0.45:
             label = "Sound Grain"
+
+        elif label == "Lustre Loss":
+            if conf < 0.40:
+                label = "Sound Grain"
                 
         elif label == "Foreign Matter":
             if conf < 0.50:
@@ -116,10 +119,10 @@ def analyze_sample(cv_img, model):
             if conf < 0.70 or box_area < 50 or aspect_ratio < 1.6:
                 label = "Sound Grain"
                 
-        elif label == "Damage" and conf < 0.80:
+        elif label == "Damage" and conf < 0.65:
             # Strong performance baseline. Lowered block limit from 0.88 to 0.50 to accept clear classifications
             label = "Sound Grain"
-            if aspect_ratio > 1.35 and conf < 0.88:
+            if aspect_ratio > 1.65:
                 label = "Sound Grain"
             
         # Safe fallback for any unspecified class labels
