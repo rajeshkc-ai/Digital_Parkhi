@@ -118,36 +118,107 @@ def classify_grain(cnt, roi_bgr, roi_gray):
 
     solidity = area / (hull_area + 1e-6)
 
-    # Texture features
-    laplacian_var = cv2.Laplacian(
+    # ---------------------------
+    # COLOR FEATURES
+    # ---------------------------
+
+    hsv = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2HSV)
+
+    mean_h = np.mean(hsv[:, :, 0])
+    mean_s = np.mean(hsv[:, :, 1])
+    mean_v = np.mean(hsv[:, :, 2])
+
+    # ---------------------------
+    # TEXTURE FEATURES
+    # ---------------------------
+
+    lap_var = cv2.Laplacian(
         roi_gray,
         cv2.CV_64F
     ).var()
 
-    hsv = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2HSV)
+    std_intensity = np.std(roi_gray)
 
-    mean_sat = np.mean(hsv[:, :, 1])
+    # ---------------------------
+    # EDGE FEATURES
+    # ---------------------------
 
-    mean_val = np.mean(hsv[:, :, 2])
+    edges = cv2.Canny(roi_gray, 50, 150)
 
-    # Foreign matter
-    if mean_sat < 18 and mean_val < 120:
+    edge_density = np.sum(edges > 0) / (roi_gray.size + 1e-6)
+
+    # =====================================================
+    # FOREIGN MATTER
+    # =====================================================
+
+    if (
+        mean_v < 85
+        and mean_s < 25
+    ):
         return 'Foreign Matter'
 
-    # Broken grain
-    if area < 110:
+    # =====================================================
+    # BROKEN
+    # =====================================================
+
+    if area < 95:
         return 'Broken'
 
-    # Shrivelled
-    if aspect_ratio > 3.2 or solidity < 0.78:
+    # =====================================================
+    # SHRIVELLED
+    # =====================================================
+
+    shrivel_score = 0
+
+    if aspect_ratio > 3.0:
+        shrivel_score += 1
+
+    if solidity < 0.82:
+        shrivel_score += 1
+
+    if mean_v < 125:
+        shrivel_score += 1
+
+    if shrivel_score >= 2:
         return 'Shrivelled'
 
-    # Damage detection
-    if laplacian_var > 190:
+    # =====================================================
+    # DAMAGE
+    # =====================================================
+
+    damage_score = 0
+
+    if lap_var > 450:
+        damage_score += 1
+
+    if edge_density > 0.18:
+        damage_score += 1
+
+    if std_intensity > 42:
+        damage_score += 1
+
+    if mean_h < 18:
+        damage_score += 1
+
+    if damage_score >= 3:
         return 'Damage'
 
-    # Lustre loss
-    if mean_sat < 28 and mean_val > 150:
+    # =====================================================
+    # LUSTRE LOSS
+    # =====================================================
+
+    lustre_score = 0
+
+    if mean_s < 38:
+        lustre_score += 1
+
+    if std_intensity < 26:
+        lustre_score += 1
+
+    if mean_v > 145:
+        lustre_score += 1
+
+    if lustre_score >= 2:
         return 'Lustre Loss'
 
     return 'Sound Grain'
