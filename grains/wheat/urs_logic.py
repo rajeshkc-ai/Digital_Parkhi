@@ -99,9 +99,8 @@ def analyze_sample(cv_img, model):
         # ⭐ SHIELD 1: Force Shrivelled and Broken to pass through instantly.
         # No confidence overrides, no size filters can touch them.
         if label in ["Shrivelled", "Broken", "Foreign Matter"]:
-            #final_labels_list.append(label)
-            #continue  # Skip all other checks and move to the next grain immediately
-            pass # Keep it exactly as predicted
+            final_labels_list.append(label)
+            continue  # Skip all other checks and move to the next grain immediately          
 
         # Apply strict safety overrides directly to string categories
         elif label == "Ergoty Damage":
