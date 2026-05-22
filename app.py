@@ -1,7 +1,6 @@
 import streamlit as st
 import cv2
 import numpy as np
-from ultralytics import YOLO
 from datetime import datetime
 
 # Import specialized logic files
@@ -14,11 +13,6 @@ if 'page' not in st.session_state: st.session_state.page = 'welcome'
 if 'grain' not in st.session_state: st.session_state.grain = None
 if 'cat' not in st.session_state: st.session_state.cat = None
 
-@st.cache_resource
-def load_model():
-    return YOLO("best.pt")
-
-model = load_model()
 
 # --- NAVIGATION ---
 if st.session_state.page == 'welcome':
