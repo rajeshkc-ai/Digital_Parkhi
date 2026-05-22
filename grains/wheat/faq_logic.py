@@ -124,11 +124,14 @@ def analyze_sample(cv_img, model):
             if aspect_ratio > 1.35 and conf < 0.88:
                 label = "Sound Grain"
                        
-        elif label == "Slightly Damage" and conf < 0.30:
+        elif label == "Slightly Damage" and conf < 0.45:
             # Lower model recall (0.670). Reduced limit from 0.50 to 0.30 so subtle blemishes aren't missed
             label = "Sound Grain"
             
-        
+        # Safe fallback for any unspecified class labels
+        else:
+            pass
+            
         # Let Broken, Shrivelled, and Foreign Matter pass through cleanly as explicit strings
         final_labels_list.append(label)
     
