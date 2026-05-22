@@ -19,6 +19,10 @@ CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
 
 def analyze_sample(cv_img, model):
     """Performs CLAHE enhancement and Sliced Inference with global NMS tracking"""
+    """Performs inference and draws bounding boxes on a copy of the original image"""
+    # Create a clean copy of the original image to draw bounding boxes on
+    annotated_img = cv_img.copy()
+    
     # 1. Enhance Contrast safely
     lab = cv2.cvtColor(cv_img, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
@@ -59,7 +63,7 @@ def analyze_sample(cv_img, model):
                     global_classes.append(cls)
 
     if not global_boxes:
-        return []
+        return [], annotated_img
 
     # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
@@ -67,6 +71,17 @@ def analyze_sample(cv_img, model):
     keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.45)
 
     final_labels_list = []
+
+    # Color map for beautiful boxes (B, G, R format for OpenCV)
+    COLOR_MAP = {
+        'Sound Grain': (0, 255, 0),        # Green
+        'Damage': (0, 0, 255),             # Red
+        'Slightly Damage': (0, 165, 255),  # Orange
+        'Shrivelled': (255, 255, 0),       # Cyan / Yellow-Blue
+        'Broken': (255, 0, 255),           # Magenta
+        'Foreign Matter': (0, 255, 255),   # Yellow
+        'Ergoty Damage': (0, 0, 0)         # Black
+    }
     
     # 4. Process deduplicated predictions through validation filters
     for idx in keep_indices:
@@ -78,22 +93,26 @@ def analyze_sample(cv_img, model):
         x1, y1, x2, y2 = global_boxes[idx]
         bw, bh = x2 - x1, y2 - y1
         box_area = bw * bh
+        aspect_ratio = max(bw, bh) / (min(bw, bh) + 1e-6)
         
         # ⭐ SHIELD 1: Force Shrivelled and Broken to pass through instantly.
         # No confidence overrides, no size filters can touch them.
         if label in ["Shrivelled", "Broken", "Foreign Matter"]:
-            final_labels_list.append(label)
-            continue  # Skip all other checks and move to the next grain immediately
+            #final_labels_list.append(label)
+            #continue  # Skip all other checks and move to the next grain immediately
+            pass # Keep it exactly as predicted
 
         # Apply strict safety overrides directly to string categories
         if label == "Ergoty Damage":
             # Highly distinct shape (mAP50: 0.960). Relaxed confidence filter from 0.95 to 0.75
-            if conf < 0.70 or box_area < 50 or (max(bw, bh) / (min(bw, bh) + 1e-6)) < 1.4:
+            if conf < 0.70 or box_area < 50 or (max(bw, bh) / aspect_ratio < 1.4:
                 label = "Sound Grain"
                 
         elif label == "Damage" and conf < 0.80:
             # Strong performance baseline. Lowered block limit from 0.88 to 0.50 to accept clear classifications
             label = "Sound Grain"
+            if aspect_ratio > 1.35 and conf < 0.88:
+                label = "Sound Grain"
             
         elif label == "Slightly Damage" and conf < 0.30:
             # Lower model recall (0.670). Reduced limit from 0.50 to 0.30 so subtle blemishes aren't missed
@@ -102,7 +121,19 @@ def analyze_sample(cv_img, model):
         # Let Broken, Shrivelled, and Foreign Matter pass through cleanly as explicit strings
         final_labels_list.append(label)
 
-    return final_labels_list
+        # 🎨 DRAW BOXES ON THE FULL-SIZE IMAGE
+        color = COLOR_MAP.get(label, (255, 255, 255)) # Default white if fallback
+        ix1, iy1, ix2, iy2 = map(int, [x1, y1, x2, y2])
+        
+        # Draw bounding box rectangle
+        cv2.rectangle(annotated_img, (ix1, iy1), (ix2, iy2), color, 2)
+        
+        # Add label text right above the box
+        text_str = f"{label} {conf:.2f}"
+        cv2.putText(annotated_img, text_str, (ix1, max(iy1 - 5, 15)), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+
+    return final_labels_list, annotated_img
 
 def generate_faq_pdf(total, counts, final_status):
     """Generates the bytes for the PDF report"""
