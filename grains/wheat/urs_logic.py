@@ -100,7 +100,7 @@ def analyze_sample(cv_img, model):
         # No confidence overrides, no size filters can touch them.
         if label == "Shrivelled":
             # If the model is guessing shrivelled with weak confidence, it's a sound grain!
-            if conf < 0.65:
+            if conf < 0.75:
                 label = "Sound Grain"
                 
         elif label == "Broken":
