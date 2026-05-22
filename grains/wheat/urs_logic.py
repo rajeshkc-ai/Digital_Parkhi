@@ -81,6 +81,7 @@ def analyze_sample(cv_img, model):
         'Broken': (255, 0, 255),           # Magenta
         'Foreign Matter': (0, 255, 255),   # Yellow
         'Ergoty Damage': (0, 0, 0)         # Black
+        'Lustre Loss': (255,255,255)       # White
     }
     
     # 4. Process deduplicated predictions through validation filters
@@ -103,9 +104,9 @@ def analyze_sample(cv_img, model):
             pass # Keep it exactly as predicted
 
         # Apply strict safety overrides directly to string categories
-        if label == "Ergoty Damage":
+        elif label == "Ergoty Damage":
             # Highly distinct shape (mAP50: 0.960). Relaxed confidence filter from 0.95 to 0.75
-            if conf < 0.70 or box_area < 50 or (max(bw, bh) / aspect_ratio < 1.4:
+            if conf < 0.70 or box_area < 50 or aspect_ratio < 1.4:
                 label = "Sound Grain"
                 
         elif label == "Damage" and conf < 0.80:
