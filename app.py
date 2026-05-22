@@ -174,13 +174,8 @@ elif st.session_state.page == 'upload':
             data=pdf_bytes,
             file_name=f"FCI_{grain_type}_{grade_label}_Report_{datetime.now().strftime('%d%m%y')}.pdf",
             mime="application/pdf"
-        )
 
-    if st.button("Reset"):
-        st.session_state.page = 'welcome'
-        st.rerun()
-
-     # --- NEW VISUAL BOX INSPECTOR SECTION ---
+        # --- NEW VISUAL BOX INSPECTOR SECTION ---
         st.markdown("### 🔍 Grain Detection Visual Inspector")
         st.write("Review the bounding boxes below to confirm the model's accuracy.")
         
@@ -188,3 +183,9 @@ elif st.session_state.page == 'upload':
         for img_name, rgb_img in processed_images_to_show:
             with st.expander(f"👁️ View Bounding Boxes for {img_name}", expanded=True):
                 st.image(rgb_img, caption=f"AI Detection Output Layer - {img_name}", use_container_width=True)
+
+        )
+
+    if st.button("Reset"):
+        st.session_state.page = 'welcome'
+        st.rerun()
