@@ -20,40 +20,41 @@ CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
 def analyze_sample(cv_img, model):
     """Performs CLAHE enhancement and Sliced Inference with global NMS tracking"""
     """Performs inference and draws bounding boxes on a copy of the original image"""
-    # Create a clean copy of the original image to draw bounding boxes on
-    annotated_img = cv_img.copy()
+    # 1. STANDARDIZE RESOLUTION TO PREVENT SKIPPING GRAINS
+    # Resize large smartphone photos to a standard height of 1920px while keeping aspect ratio
+    target_h = 1920
+    h, w, _ = cv_img.shape
+    scale = target_h / h
+    target_w = int(w * scale)
+    img = cv2.resize(cv_img, (target_w, target_h), interpolation=cv2.INTER_AREA)
     
-    # 1. Enhance Contrast safely
-    lab = cv2.cvtColor(cv_img, cv2.COLOR_BGR2LAB)
-    l, a, b = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8,8))
-    cl = clahe.apply(l)
-    img = cv2.cvtColor(cv2.merge((cl, a, b)), cv2.COLOR_LAB2BGR)
+    # Create a clean copy of the resized image to draw bounding boxes on
+    annotated_img = img.copy()
     
-    # 2. Slice Setup
+    # 2. REMOVE CLAHE ALTERATION (Use natural crisp lighting)
+    # We pass the clean, resized image directly to the slicing loop
     h, w, _ = img.shape
     slice_size = 640
-    step = int(slice_size * 0.75) # 25% overlap
+    step = int(slice_size * 0.50) # 50% overlap ensures zero missed gaps near borders
     
     global_boxes = []
     global_confs = []
     global_classes = []
 
-    # Slicing Processing Loop
-    for y in range(0, h, step):
-        for x in range(0, w, step):
-            y2, x2 = min(y + slice_size, h), min(x + slice_size, w)
-            tile = img[y:y2, x:x2]
+    # 3. PRECISION SLICING LOOP
+    for y in range(0, h - slice_size + 1, step):
+        for x in range(0, w - slice_size + 1, step):
+            tile = img[y:y + slice_size, x:x + slice_size]
             
-            # Using 0.15 baseline ensures smaller fragments are registered
-            preds = model.predict(tile, conf=0.10, verbose=False)
+            # Run YOLO prediction on the standard 640x640 tile window
+            preds = model.predict(tile, conf=0.25, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
                     cls = int(box.cls[0])
                     conf = float(box.conf[0])
                     
-                    # Convert tile-relative coordinates back to global canvas scale coordinates
+                    # Map tile coordinates back to the global resized coordinates
                     bx_c, by_c, bw, bh = map(float, box.xywh[0])
                     global_x = x + (bx_c - bw/2)
                     global_y = y + (by_c - bh/2)
@@ -62,13 +63,14 @@ def analyze_sample(cv_img, model):
                     global_confs.append(conf)
                     global_classes.append(cls)
 
+    # Handle edge case where no grains are found
     if not global_boxes:
         return [], annotated_img
 
     # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
     confs_t = torch.tensor(global_confs)
-    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.45)
+    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.40)
 
     final_labels_list = []
 
@@ -80,17 +82,15 @@ def analyze_sample(cv_img, model):
         'Shrivelled': (255, 255, 0),       # Cyan / Yellow-Blue
         'Broken': (255, 0, 255),           # Magenta
         'Foreign Matter': (0, 255, 255),   # Yellow
-        'Ergoty Damage': (0, 0, 0),         # Black
         'Lustre Loss': (255,255,255)       # White
     }
     
-    # 4. Process deduplicated predictions through validation filters
+    # 5. POST-PROCESSING EVALUATION WALLS
     for idx in keep_indices:
         cls = global_classes[idx]
         conf = global_confs[idx]
         label = CLASS_MAP.get(cls)
         
-        # Calculate bounding dimensions from global coordinates
         x1, y1, x2, y2 = global_boxes[idx]
         bw, bh = x2 - x1, y2 - y1
         box_area = bw * bh
@@ -98,15 +98,13 @@ def analyze_sample(cv_img, model):
         
         # ⭐ SHIELD 1: Force Shrivelled and Broken to pass through instantly.
         # No confidence overrides, no size filters can touch them.
-        if label == "Shrivelled":
-            # If the model is guessing shrivelled with weak confidence, it's a sound grain!
-            if conf < 0.55:
-                label = "Sound Grain"
-                
-        elif label == "Broken":
-            # Broken pieces must be reasonably confident and physically small
-            if conf < 0.55 or box_area > 150:
-                label = "Sound Grain"
+        # Apply strict confidence filters to keep classes honest
+        if label == "Shrivelled" and conf < 0.55:
+            label = "Sound Grain"
+        elif label == "Broken" and (conf < 0.60 or box_area > 180):
+            label = "Sound Grain"
+        elif label == "Slightly Damage" and conf < 0.50:
+            label = "Sound Grain"
                 
         elif label == "Foreign Matter":
             if conf < 0.50:
@@ -124,9 +122,6 @@ def analyze_sample(cv_img, model):
             if aspect_ratio > 1.35 and conf < 0.88:
                 label = "Sound Grain"
             
-        elif label == "Slightly Damage" and conf < 0.45:
-            # Lower model recall (0.670). Reduced limit from 0.50 to 0.30 so subtle blemishes aren't missed
-            label = "Sound Grain"
         # Safe fallback for any unspecified class labels
         else:
             pass
