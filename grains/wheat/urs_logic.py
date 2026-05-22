@@ -98,9 +98,19 @@ def analyze_sample(cv_img, model):
         
         # ⭐ SHIELD 1: Force Shrivelled and Broken to pass through instantly.
         # No confidence overrides, no size filters can touch them.
-        if label in ["Shrivelled", "Broken", "Foreign Matter"]:
-            final_labels_list.append(label)
-            continue  # Skip all other checks and move to the next grain immediately          
+        if label == "Shrivelled":
+            # If the model is guessing shrivelled with weak confidence, it's a sound grain!
+            if conf < 0.65:
+                label = "Sound Grain"
+                
+        elif label == "Broken":
+            # Broken pieces must be reasonably confident and physically small
+            if conf < 0.55 or box_area > 150:
+                label = "Sound Grain"
+                
+        elif label == "Foreign Matter":
+            if conf < 0.50:
+                label = "Sound Grain"          
 
         # Apply strict safety overrides directly to string categories
         elif label == "Ergoty Damage":
