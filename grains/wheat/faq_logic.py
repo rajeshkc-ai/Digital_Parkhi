@@ -20,6 +20,10 @@ CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
 
 def analyze_sample(cv_img, model):
     """Performs CLAHE enhancement and Sliced Inference with global NMS tracking"""
+    """Performs inference and draws bounding boxes on a copy of the original image"""
+    # Create a clean copy of the original image to draw bounding boxes on
+    annotated_img = cv_img.copy()
+    
     # 1. Enhance Contrast safely
     lab = cv2.cvtColor(cv_img, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
@@ -42,7 +46,7 @@ def analyze_sample(cv_img, model):
             y2, x2 = min(y + slice_size, h), min(x + slice_size, w)
             tile = img[y:y2, x:x2]
             
-            # Using 0.15 baseline ensures smaller fragments are registered
+            # Using 0.10 baseline ensures smaller fragments are registered
             preds = model.predict(tile, conf=0.10, verbose=False)
             
             for r in preds:
@@ -60,7 +64,7 @@ def analyze_sample(cv_img, model):
                     global_classes.append(cls)
 
     if not global_boxes:
-        return []
+        return [], annotated_img
 
     # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
@@ -95,19 +99,20 @@ def analyze_sample(cv_img, model):
         # ⭐ SHIELD 1: Force Shrivelled and Broken to pass through instantly.
         # No confidence overrides, no size filters can touch them.
         if label in ["Shrivelled", "Broken", "Foreign Matter"]:
-            final_labels_list.append(label)
-            continue  # Skip all other checks and move to the next grain immediately
+            # final_labels_list.append(label)
+            # continue  # Skip all other checks and move to the next grain immediately
+            pass # Keep it exactly as predicted
 
         # Apply strict safety overrides directly to string categories
-        if label == "Ergoty Damage":
+        elif label == "Ergoty Damage":
             # Highly distinct shape (mAP50: 0.960). Relaxed confidence filter from 0.95 to 0.75
-            if conf < 0.70 or box_area < 50 or (max(bw, bh) / (min(bw, bh) + 1e-6)) < 1.4:
+            if conf < 0.75 or box_area < 50 or aspect_ratio < 1.6:
                 label = "Sound Grain"
                 
         elif label == "Damage" and conf < 0.75:
             # Strong performance baseline. Lowered block limit from 0.88 to 0.50 to accept clear classifications
             label = "Sound Grain"
-            if aspect_ratio > 1.35 and conf < 0.88:
+            elif aspect_ratio > 1.35 and conf < 0.88:
                 label = "Sound Grain"
                        
         elif label == "Slightly Damage" and conf < 0.30:
