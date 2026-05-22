@@ -161,16 +161,7 @@ elif st.session_state.page == 'upload':
         output_txt += f"\nFINAL STATUS: {final_status}\n" + "="*50
         st.code(output_txt, language="text")
 
-        # --- NEW VISUAL BOX INSPECTOR SECTION ---
-        st.markdown("### 🔍 Grain Detection Visual Inspector")
-        st.write("Review the bounding boxes below to confirm the model's accuracy.")
-        
-        # Display each processed sample picture out clearly
-        for img_name, rgb_img in processed_images_to_show:
-            with st.expander(f"👁️ View Bounding Boxes for {img_name}", expanded=True):
-                st.image(rgb_img, caption=f"AI Detection Output Layer - {img_name}", use_container_width=True)
-
-        # 5. DYNAMIC PDF GENERATION CALL
+       # 5. DYNAMIC PDF GENERATION CALL
         # Expects a pdf generation function setup inside each respective module template
         if hasattr(active_module, 'generate_pdf'):
             pdf_bytes = active_module.generate_pdf(grand_total, master_counts, final_status)
@@ -188,3 +179,12 @@ elif st.session_state.page == 'upload':
     if st.button("Reset"):
         st.session_state.page = 'welcome'
         st.rerun()
+
+     # --- NEW VISUAL BOX INSPECTOR SECTION ---
+        st.markdown("### 🔍 Grain Detection Visual Inspector")
+        st.write("Review the bounding boxes below to confirm the model's accuracy.")
+        
+        # Display each processed sample picture out clearly
+        for img_name, rgb_img in processed_images_to_show:
+            with st.expander(f"👁️ View Bounding Boxes for {img_name}", expanded=True):
+                st.image(rgb_img, caption=f"AI Detection Output Layer - {img_name}", use_container_width=True)
