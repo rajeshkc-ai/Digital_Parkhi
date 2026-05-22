@@ -4,12 +4,11 @@ import torch
 from fpdf import FPDF
 from datetime import datetime
 
-# 🔴 URS SPECIFICATIONS RMS 2026-27 - FULLY COMPLIANT WITH COMBINED DAMAGE METRIC
+# 🔴 URS SPECIFICATIONS RMS 2026-27 (Keys perfectly aligned with standard lookups)
 WHEAT_URS_NORMS = {
     'Foreign Matter': 0.75,
     'Other Foodgrains': 2.0,
     'Shrivelled & Broken': 15.00,
-    'Damage & Slightly Damage': 6.00,
     'Lustre Loss': 70.00    
 }
 
@@ -17,7 +16,7 @@ CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
              4: 'Shrivelled', 5: 'Slightly Damage', 6: 'Sound Grain', 7: 'Lustre Loss'}
 
 def analyze_sample(cv_img, model):
-    """Performs scaled tile-slicing logic using optimal threshold values"""
+    """Performs standardized image slicing and accurate defect parsing"""
     target_h = 1920
     h, w, _ = cv_img.shape
     scale = target_h / h
@@ -27,7 +26,7 @@ def analyze_sample(cv_img, model):
     annotated_img = img.copy()
     
     slice_size = 640
-    step = int(slice_size * 0.50) # 50% overlap prevents missing bounding boxes at slice borders
+    step = int(slice_size * 0.50) # 50% overlap prevents boundary blindspots
     
     global_boxes = []
     global_confs = []
@@ -37,7 +36,7 @@ def analyze_sample(cv_img, model):
         for x in range(0, target_w - slice_size + 1, step):
             tile = img[y:y + slice_size, x:x + slice_size]
             
-            # Lowering evaluation threshold to 0.15 catches true positive defect classes
+            # Use 0.15 to allow model predictions to surface safely before filtering
             preds = model.predict(tile, conf=0.15, verbose=False)
             
             for r in preds:
@@ -56,10 +55,9 @@ def analyze_sample(cv_img, model):
     if not global_boxes:
         return [], annotated_img
 
-    # Deduplicate redundant overlapping tiles via NMS
     boxes_t = torch.tensor(global_boxes)
     confs_t = torch.tensor(global_confs)
-    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.40)
+    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.35)
 
     final_labels_list = []
 
@@ -76,29 +74,29 @@ def analyze_sample(cv_img, model):
     for idx in keep_indices:
         cls = global_classes[idx]
         conf = global_confs[idx]
-        label = CLASS_MAP.get(cls)
+        label = CLASS_MAP.get(cls, 'Sound Grain')
         
         x1, y1, x2, y2 = global_boxes[idx]
         bw, bh = x2 - x1, y2 - y1
         box_area = bw * bh
         
-        # Adjusted post-processing limits so valid detections are not systematically rewritten to Sound Grain
-        if label == "Shrivelled" and conf < 0.40:
+        # Balanced confidence gates to keep classes honest without aggressive overrides
+        if label == "Shrivelled" and conf < 0.45:
             label = "Sound Grain"
-        elif label == "Broken" and (conf < 0.40 or box_area > 350):
+        elif label == "Broken" and (conf < 0.40 or box_area > 200):
             label = "Sound Grain"
         elif label == "Slightly Damage" and conf < 0.35:
             label = "Sound Grain"
         elif label == "Damage" and conf < 0.35:
             label = "Sound Grain"
-        elif label == "Lustre Loss" and conf < 0.35:
+        elif label == "Lustre Loss" and conf < 0.30:
             label = "Sound Grain"
-        elif label == "Foreign Matter" and conf < 0.40:
+        elif label == "Foreign Matter" and conf < 0.35:
             label = "Sound Grain"          
 
         final_labels_list.append(label)
 
-        # Draw box onto the final visualization canvas layer
+        # Render bounding boxes cleanly
         color = COLOR_MAP.get(label, (255, 255, 255))
         ix1, iy1, ix2, iy2 = map(int, [x1, y1, x2, y2])
         
@@ -110,7 +108,7 @@ def analyze_sample(cv_img, model):
     return final_labels_list, annotated_img
 
 def generate_faq_pdf(total, counts, final_status):
-    """Generates official standard-compliant metric reports as byte objects"""
+    """Generates clean FPDF report matching terminal metrics"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
@@ -138,8 +136,6 @@ def generate_faq_pdf(total, counts, final_status):
     for cat, limit in WHEAT_URS_NORMS.items():
         if cat == 'Shrivelled & Broken':
             val = ((counts.get('Shrivelled', 0) + counts.get('Broken', 0)) / total * 100) if total > 0 else 0
-        elif cat == 'Damage & Slightly Damage':
-            val = combined_damage_pct
         else:
             val = (counts.get(cat, 0) / total * 100) if total > 0 else 0
         
@@ -149,6 +145,13 @@ def generate_faq_pdf(total, counts, final_status):
         pdf.cell(40, 10, f"{val:.2f}%", 1, 0, 'C')
         pdf.cell(40, 10, f"{limit:.2f}%", 1, 0, 'C')
         pdf.cell(40, 10, status, 1, 1, 'C')
+
+    # Combined matrix validation check row
+    joint_row_status = "FAIL" if combined_damage_pct > 6.0 else "OK"
+    pdf.cell(60, 10, " Damage & Slightly Damage", 1)
+    pdf.cell(40, 10, f"{combined_damage_pct:.2f}%", 1, 0, 'C')
+    pdf.cell(40, 10, "6.00%", 1, 0, 'C')
+    pdf.cell(40, 10, joint_row_status, 1, 1, 'C')
 
     pdf.ln(10)
     pdf.set_font("Arial", 'B', 14)
