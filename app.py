@@ -89,7 +89,7 @@ elif st.session_state.page == 'upload':
                     st.error(f"Could not read file: {f.name}")
                     continue
 
-                preds, output_visual_img = active_module.analyze_sample(img, model)
+                preds, output_visual_img = active_module.analyze_sample(img)
                 grand_total += len(preds)
                 
                 for label in preds:
