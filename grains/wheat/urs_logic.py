@@ -25,104 +25,67 @@ CLASS_MAP = {
 
 def segment_grains(image):
 
-    # =========================================
-    # LIGHTING NORMALIZATION
-    # =========================================
-
-    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-
-    l, a, b = cv2.split(lab)
-
-    clahe = cv2.createCLAHE(
-        clipLimit=2.0,
-        tileGridSize=(8, 8)
-    )
-
-    cl = clahe.apply(l)
-
-    merged = cv2.merge((cl, a, b))
-
-    image = cv2.cvtColor(
-        merged,
-        cv2.COLOR_LAB2BGR
-    )
-
-    # =========================================
-    # SEGMENTATION STARTS HERE
-    # =========================================
-
+    # STEP 1
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
-
-    _, thresh = cv2.threshold(
-        blur,
-        0,
+    # STEP 2
+    thresh = cv2.adaptiveThreshold(
+        gray,
         255,
-        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        31,
+        8
     )
 
-    kernel = np.ones((3, 3), np.uint8)
+    # STEP 3
+    kernel = np.ones((3,3), np.uint8)
 
-    opening = cv2.morphologyEx(
+    thresh = cv2.morphologyEx(
         thresh,
         cv2.MORPH_OPEN,
         kernel,
-        iterations=2
+        iterations=1
     )
 
-    sure_bg = cv2.dilate(opening, kernel, iterations=3)
+    thresh = cv2.dilate(thresh, kernel, iterations=1)
 
-    dist_transform = cv2.distanceTransform(
-        opening,
-        cv2.DIST_L2,
-        5
+    # STEP 4
+    contours, _ = cv2.findContours(
+        thresh,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
     )
 
-    _, sure_fg = cv2.threshold(
-        dist_transform,
-        0.35 * dist_transform.max(),
-        255,
-        0
-    )
+    grain_boxes = []
 
-    sure_fg = np.uint8(sure_fg)
+    img_h, img_w = image.shape[:2]
 
-    unknown = cv2.subtract(sure_bg, sure_fg)
+    # STEP 5
+    for cnt in contours:
 
-    _, markers = cv2.connectedComponents(sure_fg)
+        area = cv2.contourArea(cnt)
 
-    markers = markers + 1
-
-    markers[unknown == 255] = 0
-
-    markers = cv2.watershed(image, markers)
-
-    contours = []
-
-    for marker_id in np.unique(markers):
-
-        if marker_id <= 1:
+        if area < 40:
             continue
 
-        mask = np.zeros(gray.shape, dtype=np.uint8)
+        if area > 5000:
+            continue
 
-        mask[markers == marker_id] = 255
+        x, y, w, h = cv2.boundingRect(cnt)
 
-        cnts, _ = cv2.findContours(
-            mask,
-            cv2.RETR_EXTERNAL,
-            cv2.CHAIN_APPROX_SIMPLE
-        )
+        # Reject border objects
+        if x <= 5 or y <= 5 or (x+w) >= img_w-5 or (y+h) >= img_h-5:
+            continue
 
-        if cnts:
+        aspect_ratio = h / float(w + 1e-6)
 
-            largest = max(cnts, key=cv2.contourArea)
+        if aspect_ratio < 1.2:
+            continue
 
-            if cv2.contourArea(largest) > 40:
-                contours.append(largest)
+        grain_boxes.append((x, y, w, h))
 
-    return contours
+    return grain_boxes
 
 # =========================================================
 # GRAIN CLASSIFICATION
