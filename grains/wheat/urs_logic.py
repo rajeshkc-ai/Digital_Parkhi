@@ -24,43 +24,76 @@ CLASS_MAP = {
 # =========================================================
 
 def segment_grains(image):
-    """Detect grains using classical computer vision."""
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Improve contrast
-    gray = cv2.GaussianBlur(gray, (5, 5), 0)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    # Binary inverse threshold
     _, thresh = cv2.threshold(
-        gray,
+        blur,
         0,
         255,
         cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
     )
 
-    # Morphology cleanup
     kernel = np.ones((3, 3), np.uint8)
 
-    thresh = cv2.morphologyEx(
+    opening = cv2.morphologyEx(
         thresh,
         cv2.MORPH_OPEN,
         kernel,
-        iterations=1
+        iterations=2
     )
 
-    thresh = cv2.morphologyEx(
-        thresh,
-        cv2.MORPH_CLOSE,
-        kernel,
-        iterations=1
+    sure_bg = cv2.dilate(opening, kernel, iterations=3)
+
+    dist_transform = cv2.distanceTransform(
+        opening,
+        cv2.DIST_L2,
+        5
     )
 
-    contours, _ = cv2.findContours(
-        thresh,
-        cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE
+    _, sure_fg = cv2.threshold(
+        dist_transform,
+        0.35 * dist_transform.max(),
+        255,
+        0
     )
+
+    sure_fg = np.uint8(sure_fg)
+
+    unknown = cv2.subtract(sure_bg, sure_fg)
+
+    _, markers = cv2.connectedComponents(sure_fg)
+
+    markers = markers + 1
+
+    markers[unknown == 255] = 0
+
+    markers = cv2.watershed(image, markers)
+
+    contours = []
+
+    for marker_id in np.unique(markers):
+
+        if marker_id <= 1:
+            continue
+
+        mask = np.zeros(gray.shape, dtype=np.uint8)
+
+        mask[markers == marker_id] = 255
+
+        cnts, _ = cv2.findContours(
+            mask,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        if cnts:
+            largest = max(cnts, key=cv2.contourArea)
+
+            if cv2.contourArea(largest) > 40:
+                contours.append(largest)
 
     return contours
 
@@ -68,12 +101,11 @@ def segment_grains(image):
 # GRAIN CLASSIFICATION
 # =========================================================
 
-def classify_grain(cnt, roi_gray):
-    """Classify grain using morphology."""
+def classify_grain(cnt, roi_bgr, roi_gray):
 
     area = cv2.contourArea(cnt)
 
-    if area < 20:
+    if area < 25:
         return None
 
     x, y, w, h = cv2.boundingRect(cnt)
@@ -81,22 +113,41 @@ def classify_grain(cnt, roi_gray):
     aspect_ratio = max(w, h) / (min(w, h) + 1e-6)
 
     hull = cv2.convexHull(cnt)
+
     hull_area = cv2.contourArea(hull)
 
     solidity = area / (hull_area + 1e-6)
 
-    mean_intensity = np.mean(roi_gray)
+    # Texture features
+    laplacian_var = cv2.Laplacian(
+        roi_gray,
+        cv2.CV_64F
+    ).var()
+
+    hsv = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2HSV)
+
+    mean_sat = np.mean(hsv[:, :, 1])
+
+    mean_val = np.mean(hsv[:, :, 2])
+
+    # Foreign matter
+    if mean_sat < 18 and mean_val < 120:
+        return 'Foreign Matter'
 
     # Broken grain
-    if area < 120:
+    if area < 110:
         return 'Broken'
 
-    # Shrivelled grain
-    if solidity < 0.82 or aspect_ratio > 2.8:
+    # Shrivelled
+    if aspect_ratio > 3.2 or solidity < 0.78:
         return 'Shrivelled'
 
+    # Damage detection
+    if laplacian_var > 190:
+        return 'Damage'
+
     # Lustre loss
-    if mean_intensity > 170:
+    if mean_sat < 28 and mean_val > 150:
         return 'Lustre Loss'
 
     return 'Sound Grain'
