@@ -4,11 +4,12 @@ import torch
 from fpdf import FPDF
 from datetime import datetime
 
-# 🔴 URS SPECIFICATIONS RMS 2026-27 (Keys perfectly aligned with standard lookups)
+# 🔴 CORRECTED URS SPECIFICATIONS FOR RMS 2026-27
 WHEAT_URS_NORMS = {
     'Foreign Matter': 0.75,
     'Other Foodgrains': 2.0,
     'Shrivelled & Broken': 15.00,
+    'Damage & Slightly Damage': 6.00,
     'Lustre Loss': 70.00    
 }
 
@@ -16,7 +17,7 @@ CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
              4: 'Shrivelled', 5: 'Slightly Damage', 6: 'Sound Grain', 7: 'Lustre Loss'}
 
 def analyze_sample(cv_img, model):
-    """Performs standardized image slicing and accurate defect parsing"""
+    """Slices images cleanly while filtering false-positive shrivelled counts"""
     target_h = 1920
     h, w, _ = cv_img.shape
     scale = target_h / h
@@ -26,7 +27,7 @@ def analyze_sample(cv_img, model):
     annotated_img = img.copy()
     
     slice_size = 640
-    step = int(slice_size * 0.50) # 50% overlap prevents boundary blindspots
+    step = int(slice_size * 0.50) # Balanced overlapping tile stride
     
     global_boxes = []
     global_confs = []
@@ -36,8 +37,8 @@ def analyze_sample(cv_img, model):
         for x in range(0, target_w - slice_size + 1, step):
             tile = img[y:y + slice_size, x:x + slice_size]
             
-            # Use 0.15 to allow model predictions to surface safely before filtering
-            preds = model.predict(tile, conf=0.15, verbose=False)
+            # Use a threshold baseline of 0.22 to clear raw bounding noise early
+            preds = model.predict(tile, conf=0.22, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
@@ -80,23 +81,22 @@ def analyze_sample(cv_img, model):
         bw, bh = x2 - x1, y2 - y1
         box_area = bw * bh
         
-        # Balanced confidence gates to keep classes honest without aggressive overrides
-        if label == "Shrivelled" and conf < 0.45:
+        # Calibrated filter rules to balance class distributions accurately
+        if label == "Shrivelled" and conf < 0.54:
             label = "Sound Grain"
-        elif label == "Broken" and (conf < 0.40 or box_area > 200):
+        elif label == "Broken" and (conf < 0.45 or box_area > 280):
             label = "Sound Grain"
         elif label == "Slightly Damage" and conf < 0.35:
             label = "Sound Grain"
         elif label == "Damage" and conf < 0.35:
             label = "Sound Grain"
-        elif label == "Lustre Loss" and conf < 0.30:
+        elif label == "Lustre Loss" and conf < 0.32:
             label = "Sound Grain"
-        elif label == "Foreign Matter" and conf < 0.35:
+        elif label == "Foreign Matter" and conf < 0.40:
             label = "Sound Grain"          
 
         final_labels_list.append(label)
 
-        # Render bounding boxes cleanly
         color = COLOR_MAP.get(label, (255, 255, 255))
         ix1, iy1, ix2, iy2 = map(int, [x1, y1, x2, y2])
         
@@ -107,8 +107,8 @@ def analyze_sample(cv_img, model):
 
     return final_labels_list, annotated_img
 
-def generate_faq_pdf(total, counts, final_status):
-    """Generates clean FPDF report matching terminal metrics"""
+def generate_pdf(total, counts, final_status):
+    """Generates official standard-compliant metric reports as byte objects"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
@@ -128,14 +128,12 @@ def generate_faq_pdf(total, counts, final_status):
     pdf.cell(40, 10, " Status", 1, 1, 'C', True)
 
     pdf.set_font("Arial", '', 10)
-    
-    damage_pct = (counts.get('Damage', 0) / total * 100) if total > 0 else 0.0
-    slightly_damage_pct = (counts.get('Slightly Damage', 0) / total * 100) if total > 0 else 0.0
-    combined_damage_pct = damage_pct + slightly_damage_pct
 
     for cat, limit in WHEAT_URS_NORMS.items():
         if cat == 'Shrivelled & Broken':
             val = ((counts.get('Shrivelled', 0) + counts.get('Broken', 0)) / total * 100) if total > 0 else 0
+        elif cat == 'Damage & Slightly Damage':
+            val = ((counts.get('Damage', 0) + counts.get('Slightly Damage', 0)) / total * 100) if total > 0 else 0
         else:
             val = (counts.get(cat, 0) / total * 100) if total > 0 else 0
         
@@ -145,13 +143,6 @@ def generate_faq_pdf(total, counts, final_status):
         pdf.cell(40, 10, f"{val:.2f}%", 1, 0, 'C')
         pdf.cell(40, 10, f"{limit:.2f}%", 1, 0, 'C')
         pdf.cell(40, 10, status, 1, 1, 'C')
-
-    # Combined matrix validation check row
-    joint_row_status = "FAIL" if combined_damage_pct > 6.0 else "OK"
-    pdf.cell(60, 10, " Damage & Slightly Damage", 1)
-    pdf.cell(40, 10, f"{combined_damage_pct:.2f}%", 1, 0, 'C')
-    pdf.cell(40, 10, "6.00%", 1, 0, 'C')
-    pdf.cell(40, 10, joint_row_status, 1, 1, 'C')
 
     pdf.ln(10)
     pdf.set_font("Arial", 'B', 14)
