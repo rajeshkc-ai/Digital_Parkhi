@@ -65,29 +65,28 @@ elif st.session_state.page == 'upload':
                 active_module = faq_logic
                 active_norms = getattr(faq_logic, 'WHEAT_NORMS', {})
         else:
-            st.error("Selected grain type config not found.")
+            st.error("Selected grain configuration module not found.")
             st.stop()
 
         if not active_norms:
-            st.error(f"Error: Specifications dictionary for {grain_type} ({grade_label}) could not be found.")
+            st.error(f"Error: Specifications dictionary for {grain_type} ({grade_label}) could not be located.")
             st.stop()
 
-        # Initialize tracking counters based on the active module's CLASS_MAP
+        # Initialize global counts dictionary
         master_counts = {name: 0 for name in active_module.CLASS_MAP.values()}
         file_stats = []
         grand_total = 0
         processed_images_to_show = [] 
 
-        # 2. IMAGE SCANNING ENGINE WITH STREAMLIT POINTER FIX
-        with st.spinner("Applying Deep Scan (Slicing & Enhancement)..."):
+        # --- IMAGE STREAM SCANNING LAYER ---
+        with st.spinner("Applying Deep Scan (Slicing & Optimization)..."):
             for f in files:
-                # CRITICAL: Reset file stream location pointer before reading bytes
-                f.seek(0)
+                f.seek(0)  # Reset stream pointer position to safely fetch fresh bytes
                 file_bytes = np.frombuffer(f.read(), np.uint8)
                 img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
                 if img is None:
-                    st.error(f"Could not decode image file: {f.name}")
+                    st.error(f"Could not read file: {f.name}")
                     continue
 
                 preds, output_visual_img = active_module.analyze_sample(img, model)
@@ -98,46 +97,36 @@ elif st.session_state.page == 'upload':
                         master_counts[label] += 1
                         
                 file_stats.append(f"Processed {f.name}: {len(preds)} grains.")
-                
                 rgb_output = cv2.cvtColor(output_visual_img, cv2.COLOR_BGR2RGB)
                 processed_images_to_show.append((f.name, rgb_output))
 
-        # 3. DYNAMIC EVALUATION LOOP
+        # --- EVALUATION ENGINE ---
         rej_reasons = []
         report_lines = []
         
-        damage_pct = (master_counts.get('Damage', 0) / grand_total * 100) if grand_total > 0 else 0.0
-        slightly_damage_pct = (master_counts.get('Slightly Damage', 0) / grand_total * 100) if grand_total > 0 else 0.0
-        combined_damage_pct = damage_pct + slightly_damage_pct
-
         for cat, limit in active_norms.items():
             current_category = cat.strip()
             
             if grand_total > 0:
-                if grain_type == "Wheat" and current_category == 'Shrivelled & Broken':
+                if current_category == 'Shrivelled & Broken':
                     val = ((master_counts.get('Shrivelled', 0) + master_counts.get('Broken', 0)) / grand_total) * 100
-                elif grain_type == "Wheat" and current_category == 'Damage & Slightly Damage':
-                    val = combined_damage_pct
+                elif current_category == 'Damage & Slightly Damage':
+                    val = ((master_counts.get('Damage', 0) + master_counts.get('Slightly Damage', 0)) / grand_total) * 100
                 else:
                     val = (master_counts.get(current_category, 0) / grand_total) * 100
             else:
                 val = 0.0
             
             status = "OK"
-            if current_category == 'Damage & Slightly Damage':
-                if combined_damage_pct > limit:
-                    status = "!! EXCEEDS LIMIT !!"
-                    rej_reasons.append(cat)
-            else:
-                if val > limit:
-                    status = "!! EXCEEDS LIMIT !!"
-                    rej_reasons.append(cat)
+            if val > limit:
+                status = "!! EXCEEDS LIMIT !!"
+                rej_reasons.append(cat)
                     
             report_lines.append(f"{cat.ljust(26)} : {val:5.2f}% | Limit: {limit:5.2f}% | {status}")
 
         final_status = "REJECTED" if rej_reasons else f"ACCEPTED ({grade_label})"
 
-        # 4. PRINT REPORT TERMINAL VIEW
+        # --- CONSOLE LAYOUT PRINT OUT ---
         output_txt = f"--- STARTING {grain_type.upper()} ANALYSIS ---\n" + "\n".join(file_stats)
         output_txt += "\n\n" + "="*60 + f"\nFCI AGGREGATED QC REPORT (RMS 2026-27) - {grade_label}\n" + "="*60
         output_txt += f"\nTOTAL GRAINS SCANNED : {grand_total}\n" + "-"*60 + "\n"
@@ -145,7 +134,7 @@ elif st.session_state.page == 'upload':
         output_txt += f"\nFINAL STATUS: {final_status}\n" + "="*60
         st.code(output_txt, language="text")
 
-        # 5. GENERATE REPORT DOWNLOADS
+        # --- PDF STORAGE HANDOFF ---
         if hasattr(active_module, 'generate_pdf'):
             pdf_bytes = active_module.generate_pdf(grand_total, master_counts, final_status)
         else:
@@ -161,7 +150,7 @@ elif st.session_state.page == 'upload':
         st.markdown("### 🔍 Grain Detection Visual Inspector")
         for img_name, rgb_img in processed_images_to_show:
             with st.expander(f"📦 View Bounding Boxes for {img_name}", expanded=True):
-                st.image(rgb_img, caption=f"AI Detection Output Layer - {img_name}", use_container_width=True)
+                st.image(rgb_img, caption=f"AI Layer Map - {img_name}", use_container_width=True)
 
     if st.button("Reset"):
         st.session_state.page = 'welcome'
