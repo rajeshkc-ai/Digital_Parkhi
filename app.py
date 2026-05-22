@@ -57,7 +57,6 @@ elif st.session_state.page == 'upload':
         grain_type = st.session_state.grain
         grade_label = st.session_state.cat
         
-        # 1. DYNAMIC LOGIC ROUTING
         if grain_type == "Wheat":
             if grade_label == "URS":
                 active_module = urs_logic
@@ -66,32 +65,31 @@ elif st.session_state.page == 'upload':
                 active_module = faq_logic
                 active_norms = getattr(faq_logic, 'WHEAT_NORMS', {})
         else:
-            st.error("Rice modules are not configured in this view.")
+            st.error("Selected grain type config not found.")
             st.stop()
 
         if not active_norms:
             st.error(f"Error: Specifications dictionary for {grain_type} ({grade_label}) could not be found.")
             st.stop()
 
-        # Initialize tracking counters safely
+        # Initialize tracking counters based on the active module's CLASS_MAP
         master_counts = {name: 0 for name in active_module.CLASS_MAP.values()}
         file_stats = []
         grand_total = 0
         processed_images_to_show = [] 
 
-        # 2. IMAGE SCANNING ENGINE
+        # 2. IMAGE SCANNING ENGINE WITH STREAMLIT POINTER FIX
         with st.spinner("Applying Deep Scan (Slicing & Enhancement)..."):
             for f in files:
-                # FIX: Reset buffer pointer before reading to avoid duplicate array allocation
+                # CRITICAL: Reset file stream location pointer before reading bytes
                 f.seek(0)
                 file_bytes = np.frombuffer(f.read(), np.uint8)
                 img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
                 if img is None:
-                    st.error(f"Could not decode image: {f.name}")
+                    st.error(f"Could not decode image file: {f.name}")
                     continue
 
-                # Run inference via the active module
                 preds, output_visual_img = active_module.analyze_sample(img, model)
                 grand_total += len(preds)
                 
@@ -101,7 +99,6 @@ elif st.session_state.page == 'upload':
                         
                 file_stats.append(f"Processed {f.name}: {len(preds)} grains.")
                 
-                # Convert BGR to RGB for Streamlit rendering
                 rgb_output = cv2.cvtColor(output_visual_img, cv2.COLOR_BGR2RGB)
                 processed_images_to_show.append((f.name, rgb_output))
 
@@ -119,7 +116,7 @@ elif st.session_state.page == 'upload':
             if grand_total > 0:
                 if grain_type == "Wheat" and current_category == 'Shrivelled & Broken':
                     val = ((master_counts.get('Shrivelled', 0) + master_counts.get('Broken', 0)) / grand_total) * 100
-                elif grain_type == "Wheat" and grade_label == "URS" and current_category == 'Damage & Slightly Damage':
+                elif grain_type == "Wheat" and current_category == 'Damage & Slightly Damage':
                     val = combined_damage_pct
                 else:
                     val = (master_counts.get(current_category, 0) / grand_total) * 100
@@ -127,10 +124,8 @@ elif st.session_state.page == 'upload':
                 val = 0.0
             
             status = "OK"
-            
-            # Validation rules
-            if grain_type == "Wheat" and grade_label == "URS" and current_category == 'Damage & Slightly Damage':
-                if combined_damage_pct > 6.0:
+            if current_category == 'Damage & Slightly Damage':
+                if combined_damage_pct > limit:
                     status = "!! EXCEEDS LIMIT !!"
                     rej_reasons.append(cat)
             else:
@@ -138,11 +133,11 @@ elif st.session_state.page == 'upload':
                     status = "!! EXCEEDS LIMIT !!"
                     rej_reasons.append(cat)
                     
-            report_lines.append(f"{cat.ljust(25)} : {val:5.2f}% | Limit: {limit:5.2f}% | {status}")
+            report_lines.append(f"{cat.ljust(26)} : {val:5.2f}% | Limit: {limit:5.2f}% | {status}")
 
         final_status = "REJECTED" if rej_reasons else f"ACCEPTED ({grade_label})"
 
-        # 4. PRINT TERMINAL VIEW
+        # 4. PRINT REPORT TERMINAL VIEW
         output_txt = f"--- STARTING {grain_type.upper()} ANALYSIS ---\n" + "\n".join(file_stats)
         output_txt += "\n\n" + "="*60 + f"\nFCI AGGREGATED QC REPORT (RMS 2026-27) - {grade_label}\n" + "="*60
         output_txt += f"\nTOTAL GRAINS SCANNED : {grand_total}\n" + "-"*60 + "\n"
@@ -150,11 +145,11 @@ elif st.session_state.page == 'upload':
         output_txt += f"\nFINAL STATUS: {final_status}\n" + "="*60
         st.code(output_txt, language="text")
 
-        # 5. DYNAMIC PDF GENERATION CALL
-        if hasattr(active_module, 'generate_faq_pdf'):
-            pdf_bytes = active_module.generate_faq_pdf(grand_total, master_counts, final_status)
-        else:
+        # 5. GENERATE REPORT DOWNLOADS
+        if hasattr(active_module, 'generate_pdf'):
             pdf_bytes = active_module.generate_pdf(grand_total, master_counts, final_status)
+        else:
+            pdf_bytes = active_module.generate_faq_pdf(grand_total, master_counts, final_status)
             
         st.download_button(
             label="📥 Download Official PDF Report",
