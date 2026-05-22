@@ -25,6 +25,32 @@ CLASS_MAP = {
 
 def segment_grains(image):
 
+    # =========================================
+    # LIGHTING NORMALIZATION
+    # =========================================
+
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+
+    l, a, b = cv2.split(lab)
+
+    clahe = cv2.createCLAHE(
+        clipLimit=2.0,
+        tileGridSize=(8, 8)
+    )
+
+    cl = clahe.apply(l)
+
+    merged = cv2.merge((cl, a, b))
+
+    image = cv2.cvtColor(
+        merged,
+        cv2.COLOR_LAB2BGR
+    )
+
+    # =========================================
+    # SEGMENTATION STARTS HERE
+    # =========================================
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -90,6 +116,7 @@ def segment_grains(image):
         )
 
         if cnts:
+
             largest = max(cnts, key=cv2.contourArea)
 
             if cv2.contourArea(largest) > 40:
