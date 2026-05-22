@@ -80,7 +80,7 @@ def analyze_sample(cv_img, model):
         'Shrivelled': (255, 255, 0),       # Cyan / Yellow-Blue
         'Broken': (255, 0, 255),           # Magenta
         'Foreign Matter': (0, 255, 255),   # Yellow
-        'Ergoty Damage': (0, 0, 0)         # Black
+        'Ergoty Damage': (0, 0, 0),         # Black
         'Lustre Loss': (255,255,255)       # White
     }
     
