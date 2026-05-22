@@ -85,14 +85,16 @@ elif st.session_state.page == 'upload':
         master_counts = {name: 0 for name in active_module.CLASS_MAP.values()}
         file_stats = []
         grand_total = 0
+        processed_images_to_show = [] # New list to store annotated output images
 
         # 2. IMAGE SCANNING ENGINE
         with st.spinner("Applying Deep Scan (Slicing & Enhancement)..."):
             for f in files:
                 img = cv2.imdecode(np.frombuffer(f.read(), np.uint8), 1)
-                
+
+                # 💡 NOTICE: Now captures TWO items returned from analyze_sample
                 # Use the specific logic file's inference function
-                preds = active_module.analyze_sample(img, model)
+                preds, output_visual_img = active_module.analyze_sample(img, model)
                 grand_total += len(preds)
                 
                 for label in preds:
@@ -100,6 +102,10 @@ elif st.session_state.page == 'upload':
                         master_counts[label] += 1
                         
                 file_stats.append(f"Processed {f.name}: {len(preds)} grains.")
+                
+                # Convert BGR (OpenCV) to RGB (Streamlit display format) and save
+                rgb_output = cv2.cvtColor(output_visual_img, cv2.COLOR_BGR2RGB)
+                processed_images_to_show.append((f.name, rgb_output))
 
         # 3. DYNAMIC EVALUATION LOOP
         rej_reasons = []
@@ -154,6 +160,15 @@ elif st.session_state.page == 'upload':
         output_txt += "\n".join(report_lines) + "\n" + "-"*50
         output_txt += f"\nFINAL STATUS: {final_status}\n" + "="*50
         st.code(output_txt, language="text")
+
+        # --- NEW VISUAL BOX INSPECTOR SECTION ---
+        st.markdown("### 🔍 Grain Detection Visual Inspector")
+        st.write("Review the bounding boxes below to confirm the model's accuracy.")
+        
+        # Display each processed sample picture out clearly
+        for img_name, rgb_img in processed_images_to_show:
+            with st.expander(f"👁️ View Bounding Boxes for {img_name}", expanded=True):
+                st.image(rgb_img, caption=f"AI Detection Output Layer - {img_name}", use_container_width=True)
 
         # 5. DYNAMIC PDF GENERATION CALL
         # Expects a pdf generation function setup inside each respective module template
