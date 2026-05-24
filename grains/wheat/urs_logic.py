@@ -25,21 +25,24 @@ CLASS_MAP = {
 
 def segment_grains(image):
 
-    # STEP 1
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # STEP 2
+    # ==========================================
+    # PREPROCESSING
+    # ==========================================
+
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+
     thresh = cv2.adaptiveThreshold(
-        gray,
+        blur,
         255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
         cv2.THRESH_BINARY_INV,
         31,
-        8
+        7
     )
 
-    # STEP 3
-    kernel = np.ones((3,3), np.uint8)
+    kernel = np.ones((3, 3), np.uint8)
 
     thresh = cv2.morphologyEx(
         thresh,
@@ -48,54 +51,72 @@ def segment_grains(image):
         iterations=1
     )
 
-    thresh = cv2.dilate(thresh, kernel, iterations=1)
-
-    # STEP 4
     # ==========================================
-    # IMPROVED WATERSHED SEGMENTATION
+    # DISTANCE TRANSFORM
     # ==========================================
 
-    # Distance transform
-    dist_transform = cv2.distanceTransform(
+    dist = cv2.distanceTransform(
         thresh,
         cv2.DIST_L2,
         5
     )
 
-    # Strong foreground peaks
+    dist = cv2.normalize(dist, None, 0, 1.0, cv2.NORM_MINMAX)
+
     _, sure_fg = cv2.threshold(
-        dist_transform,
-        0.45 * dist_transform.max(),
-        255,
-        0
+        dist,
+        0.32,
+        1.0,
+        cv2.THRESH_BINARY
     )
 
-    sure_fg = np.uint8(sure_fg)
+    sure_fg = np.uint8(sure_fg * 255)
 
-    # Background
-    sure_bg = cv2.dilate(thresh, kernel, iterations=2)
+    sure_bg = cv2.dilate(
+        thresh,
+        kernel,
+        iterations=2
+    )
 
     unknown = cv2.subtract(sure_bg, sure_fg)
 
-    # Connected components
+    # ==========================================
+    # WATERSHED
+    # ==========================================
+
     num_markers, markers = cv2.connectedComponents(sure_fg)
 
     markers = markers + 1
 
     markers[unknown == 255] = 0
 
-    # Watershed
     markers = cv2.watershed(image, markers)
 
     grain_boxes = []
 
-    for marker_id in np.unique(markers):
+    for marker in np.unique(markers):
 
-        if marker_id <= 1:
+        if marker <= 1:
             continue
 
-        mask = np.uint8(markers == marker_id) * 255
+        mask = np.uint8(markers == marker)
 
+        kernel = np.ones((3,3), np.uint8)
+
+        thresh = cv2.morphologyEx(
+            thresh,
+            cv2.MORPH_OPEN,
+            kernel,
+            iterations=1
+        )
+
+        thresh = cv2.morphologyEx(
+            thresh,
+            cv2.MORPH_CLOSE,
+            kernel,
+            iterations=1
+        )
+        
         contours, _ = cv2.findContours(
             mask,
             cv2.RETR_EXTERNAL,
@@ -109,24 +130,28 @@ def segment_grains(image):
 
         area = cv2.contourArea(cnt)
 
-        # Remove tiny dust
-        if area < 60:
+        # Reject tiny dust
+        if area < 80:
             continue
 
-        # Remove giant merged regions
-        if area > 2500:
+        # Reject merged huge regions
+        if area > 1200:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
 
-        # Wheat grain filtering
+        # Wheat grains are elongated
         aspect_ratio = max(h, w) / (min(h, w) + 1e-6)
 
         if aspect_ratio < 1.4:
             continue
+        
+        # Ignore extremely thin noise
+        if w < 8 or h < 18:
+            continue
 
-        # Reject very large merged grains
-        if w > 80 or h > 80:
+        # Reject merged grains
+        if w > 70 or h > 70:
             continue
 
         grain_boxes.append((x, y, w, h))
@@ -218,6 +243,25 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     if shrivel_score >= 2:
         return 'Shrivelled'
 
+    # ---------------------------
+    # IMPROVED DAMAGE DETECTION
+    # ---------------------------
+
+    # Dark spots / fungal damage
+    dark_pixels = np.sum(roi_gray < 70)
+    dark_ratio = dark_pixels / (roi_gray.size + 1e-6)
+
+    # Texture variation
+    texture_std = np.std(roi_gray)
+
+    # Strong damaged grain detection
+    if (
+        dark_ratio > 0.12 or
+        edge_density > 0.18 or
+        texture_std > 42
+    ):
+        label = "Damage"   
+        
     # =====================================================
     # DAMAGE
     # =====================================================
@@ -239,30 +283,34 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     if damage_score >= 3:
         return 'Damage'
 
-        # =====================================================
+    # =====================================================
     # LUSTRE LOSS
     # =====================================================
 
     lustre_score = 0
 
-    # Pale grain
-    if mean_s < 55:
+    # Pale wheat
+    if mean_s < 65:
         lustre_score += 1
 
-    # Bright grain
-    if mean_v > 150:
+    # Bright faded grain
+    if mean_v > 155:
         lustre_score += 1
 
-    # Smooth texture
-    if std_intensity < 32:
+    # Smooth surface
+    if std_intensity < 34:
         lustre_score += 1
 
-    # Low edge variation
-    if edge_density < 0.08:
+    # Low texture
+    if edge_density < 0.12:
+        lustre_score += 1
+
+    # Whitish appearance
+    if mean_b > mean_r:
         lustre_score += 1
 
     if lustre_score >= 3:
-        return 'Lustre Loss'
+        return "Lustre Loss"
 
     return 'Sound Grain'
 # =========================================================
