@@ -162,9 +162,6 @@ def segment_grains(image):
 
 def classify_grain(cnt, roi_bgr, roi_gray):
 
-    import cv2
-    import numpy as np
-
     # -------------------------------------------------
     # BASIC FEATURES
     # -------------------------------------------------
