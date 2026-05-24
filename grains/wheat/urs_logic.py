@@ -1,436 +1,206 @@
 import cv2
 import numpy as np
-from collections import Counter
+import torch
 from fpdf import FPDF
 from datetime import datetime
 
+# 🔴 URS SPECIFICATIONS RMS 2026-27
 WHEAT_URS_NORMS = {
     'Foreign Matter': 0.75,
     'Other Foodgrains': 2.0,
-    'Shrivelled & Broken': 15.00,
-    'Damage & Slightly Damage': 6.00,
-    'Lustre Loss': 70.00
+    'Shrivelled & Broken': 15.00,     # Relaxed from 6.0% to 15%
+    #'Damage & Slightly Damage':6.00
+    'Lustre Loss': 70.00    # New relaxed criteria up to 70%
 }
 
-CLASS_MAP = {
-    0: 'Broken',
-    1: 'Damage',
-    2: 'Ergoty Damage',
-    3: 'Foreign Matter',
-    4: 'Shrivelled',
-    5: 'Slightly Damage',
-    6: 'Sound Grain',
-    7: 'Lustre Loss'
+CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
+             4: 'Shrivelled', 5: 'Slightly Damage', 6: 'Sound Grain', 7: 'Lustre Loss'}
+
+
+def analyze_sample(cv_img, model):
+    """Performs CLAHE enhancement and Sliced Inference with global NMS tracking"""
+    """Performs inference and draws bounding boxes on a copy of the original image"""
+    # Create a clean copy of the original image to draw bounding boxes on
+    annotated_img = cv_img.copy()
     
-}
-# =========================================================
-# IMAGE SEGMENTATION
-# =========================================================
-
-def segment_grains(image):
-
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # ==========================================
-    # PREPROCESSING
-    # ==========================================
-
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
-
-    thresh = cv2.adaptiveThreshold(
-        blur,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV,
-        31,
-        7
-    )
-
-    kernel = np.ones((3, 3), np.uint8)
-
-    thresh = cv2.morphologyEx(
-        thresh,
-        cv2.MORPH_OPEN,
-        kernel,
-        iterations=1
-    )
-    thresh = cv2.morphologyEx(
-        thresh,
-        cv2.MORPH_CLOSE,
-        kernel,
-        iterations=1
-    )
-
-    # ==========================================
-    # DISTANCE TRANSFORM
-    # ==========================================
-
-    dist = cv2.distanceTransform(
-        thresh,
-        cv2.DIST_L2,
-        5
-    )
-
-    dist = cv2.normalize(dist, None, 0, 1.0, cv2.NORM_MINMAX)
-
-    _, sure_fg = cv2.threshold(
-        dist,
-        0.32,
-        1.0,
-        cv2.THRESH_BINARY
-    )
-
-    sure_fg = np.uint8(sure_fg * 255)
-
-    sure_bg = cv2.dilate(
-        thresh,
-        kernel,
-        iterations=2
-    )
-
-    unknown = cv2.subtract(sure_bg, sure_fg)
-
-    # ==========================================
-    # WATERSHED
-    # ==========================================
-
-    num_markers, markers = cv2.connectedComponents(sure_fg)
-
-    markers = markers + 1
-
-    markers[unknown == 255] = 0
-
-    markers = cv2.watershed(image, markers)
-
-    grain_boxes = []
-    filtered_boxes = []
-
-    for marker in np.unique(markers):
-
-        if marker <= 1:
-            continue
-
-        mask = np.uint8(markers == marker)
-        
-        contours, _ = cv2.findContours(
-            mask,
-            cv2.RETR_EXTERNAL,
-            cv2.CHAIN_APPROX_SIMPLE
-        )
-
-        if len(contours) == 0:
-            continue
-
-        cnt = max(contours, key=cv2.contourArea)
-
-        area = cv2.contourArea(cnt)
-
-        # Reject tiny dust
-        if area < 130:
-            continue
-
-        # Reject merged huge regions
-        if area > 1200:
-            continue
-
-        x, y, w, h = cv2.boundingRect(cnt)
-
-        aspect_ratio = max(w, h) / (min(w, h) + 1e-6)
-
-        # Reject non-grain shapes
-        if aspect_ratio < 1.3:
-            continue
-
-        # Wheat grains are elongated
-        aspect_ratio = max(h, w) / (min(h, w) + 1e-6)
-
-        if aspect_ratio < 1.15:
-            continue
-        
-        # Ignore extremely thin noise
-        if w < 8 or h < 8:
-            continue
-
-        # Reject merged grains
-        if w > 42 or h > 42:
-            continue
-
-        duplicate = False
-
-        for (fx, fy, fw, fh) in filtered_boxes:
-
-            xx1 = max(x, fx)
-            yy1 = max(y, fy)
-            xx2 = min(x + w, fx + fw)
-            yy2 = min(y + h, fy + fh)
-
-            inter = max(0, xx2 - xx1) * max(0, yy2 - yy1)
-
-            union = (w * h) + (fw * fh) - inter
-
-            iou = inter / (union + 1e-6)
-
-            if iou > 0.30:
-                duplicate = True
-                break
-
-        if not duplicate:
-            filtered_boxes.append((x, y, w, h))
-            grain_boxes.append((x, y, w, h))
-
-    return grain_boxes
-
-# =========================================================
-# GRAIN CLASSIFICATION
-# =========================================================
-
-def classify_grain(cnt, roi_bgr, roi_gray):
-
-    # -------------------------------------------------
-    # BASIC FEATURES
-    # -------------------------------------------------
-
-    area = cv2.contourArea(cnt)
-
-    x, y, w, h = cv2.boundingRect(cnt)
-
-    aspect_ratio = max(h, w) / (min(h, w) + 1e-6)
-
-    perimeter = cv2.arcLength(cnt, True)
-
-    circularity = (4 * np.pi * area) / ((perimeter * perimeter) + 1e-6)
-
-    # -------------------------------------------------
-    # HSV FEATURES
-    # -------------------------------------------------
-
-    hsv = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2HSV)
-
-    h_mean = np.mean(hsv[:, :, 0])
-    s_mean = np.mean(hsv[:, :, 1])
-    v_mean = np.mean(hsv[:, :, 2])
-
-    # -------------------------------------------------
-    # GRAY FEATURES
-    # -------------------------------------------------
-
-    gray_mean = np.mean(roi_gray)
-
-    gray_std = np.std(roi_gray)
-
-    # -------------------------------------------------
-    # EDGE FEATURES
-    # -------------------------------------------------
-
-    edges = cv2.Canny(roi_gray, 60, 160)
-
-    edge_density = np.sum(edges > 0) / (roi_gray.size + 1e-6)
-
-    # -------------------------------------------------
-    # TEXTURE FEATURES
-    # -------------------------------------------------
-
-    lap_var = cv2.Laplacian(roi_gray, cv2.CV_64F).var()
-
-    # =================================================
-    # CLASSIFICATION RULES
-    # =================================================
-
-    # =================================================
-    # IMPROVED CLASSIFICATION RULES
-    # =================================================
-
-    # Dark pixel ratio
-    dark_pixels = np.sum(roi_gray < 85)
-    dark_ratio = dark_pixels / (roi_gray.size + 1e-6)
-
-    # Fill ratio
-    fill_ratio = area / ((w * h) + 1e-6)
-
-    # Width-height ratio
-    wh_ratio = w / (h + 1e-6)
-
-    # -------------------------------------------------
-    # BROKEN
-    # -------------------------------------------------
-
-    if area < 140:
-        return "Broken"
-
-    # -------------------------------------------------
-    # SHRIVELLED
-    # -------------------------------------------------
-
-    elif (
-        fill_ratio < 0.52
-        and aspect_ratio > 1.8
-        and gray_mean > 120
-    ):
-        return "Shrivelled"
-
-    # -------------------------------------------------
-    # DAMAGE
-    # -------------------------------------------------
-
-    elif (
-        dark_ratio > 0.10
-        or gray_mean < 110
-        or lap_var > 900
-    ):
-        return "Damage"
-
-    # -------------------------------------------------
-    # LUSTRE LOSS
-    # -------------------------------------------------
-
-    elif (
-        s_mean < 32
-        and v_mean > 150
-    ):
-        return "Lustre Loss"
-
-    # -------------------------------------------------
-    # SOUND GRAIN
-    # -------------------------------------------------
-
-    return "Sound Grain"
+    # 1. Enhance Contrast safely
+    lab = cv2.cvtColor(cv_img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=1.2, tileGridSize=(8,8))
+    cl = clahe.apply(l)
+    img = cv2.cvtColor(cv2.merge((cl, a, b)), cv2.COLOR_LAB2BGR)
     
-# =========================================================
-# =========================================================
-# MAIN ANALYSIS FUNCTION
-# =========================================================
+    # 2. Slice Setup
+    h, w, _ = img.shape
+    slice_size = 640
+    step = int(slice_size * 0.75) # 25% overlap
+    
+    global_boxes = []
+    global_confs = []
+    global_classes = []
 
-def analyze_sample(cv_img, model=None):
-
-    annotated = cv_img.copy()
-
-    contours = segment_grains(cv_img)
-
-    labels = []
-
-    gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
-
-    for (x, y, w, h) in contours:
-
-        roi_gray = gray[y:y+h, x:x+w]
-
-        roi_bgr = cv_img[y:y+h, x:x+w]
-
-        # Create fake contour from box
-        cnt = np.array([
-            [[x, y]],
-            [[x+w, y]],
-            [[x+w, y+h]],
-            [[x, y+h]]
-        ])
-
-        label = classify_grain(
-            cnt,
-            roi_bgr,
-            roi_gray
-            )
-
-        if label is None:
-            continue
-
-        labels.append(label)
-
-        # Draw box
-        color = (0, 255, 0)
-
-        if label == 'Broken':
-            color = (255, 0, 255)
-
-        elif label == 'Shrivelled':
-            color = (255, 255, 0)
-
-        elif label == 'Lustre Loss':
-            color = (255, 255, 255)
-
-        elif label == 'Damage':
-            color = (0, 0, 255)
-
-        elif label == 'Sound Grain':
-            color = (0, 255, 0)
-
-        elif label == 'Foreign Matter':
-            color = (0, 255, 255)
-
-        elif label == 'Slightly Damage':
-            color = (0, 165, 255)
-
-        elif label == 'Ergoty Damage':
-            color = (0, 0, 0)
+    # Slicing Processing Loop
+    for y in range(0, h, step):
+        for x in range(0, w, step):
+            y2, x2 = min(y + slice_size, h), min(x + slice_size, w)
+            tile = img[y:y2, x:x2]
             
-        cv2.rectangle(
-            annotated,
-            (x, y),
-            (x + w, y + h),
-            color,
-            2
-        )
+            # Using 0.15 baseline ensures smaller fragments are registered
+            preds = model.predict(tile, conf=0.10, verbose=False)
+            
+            for r in preds:
+                for box in r.boxes:
+                    cls = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    
+                    # Convert tile-relative coordinates back to global canvas scale coordinates
+                    bx_c, by_c, bw, bh = map(float, box.xywh[0])
+                    global_x = x + (bx_c - bw/2)
+                    global_y = y + (by_c - bh/2)
+                    
+                    global_boxes.append([global_x, global_y, global_x + bw, global_y + bh])
+                    global_confs.append(conf)
+                    global_classes.append(cls)
 
-        cv2.putText(
-            annotated,
-            label,
-            (x, y - 5),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.4,
-            color,
-            1
-        )
+    if not global_boxes:
+        return [], annotated_img
 
-    return labels, annotated
+    # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
+    boxes_t = torch.tensor(global_boxes)
+    confs_t = torch.tensor(global_confs)
+    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.45)
 
-# =========================================================
-# PDF REPORT
-# =========================================================
+    final_labels_list = []
 
-def generate_pdf(total, counts, final_status):
+    # Color map for beautiful boxes (B, G, R format for OpenCV)
+    COLOR_MAP = {
+        'Sound Grain': (0, 255, 0),        # Green
+        'Damage': (0, 0, 255),             # Red
+        'Slightly Damage': (0, 165, 255),  # Orange
+        'Shrivelled': (255, 255, 0),       # Cyan / Yellow-Blue
+        'Broken': (255, 0, 255),           # Magenta
+        'Foreign Matter': (0, 255, 255),   # Yellow
+        'Ergoty Damage': (0, 0, 0),         # Black
+        'Lustre Loss': (255,255,255)       # White
+    }
+    
+    # 4. Process deduplicated predictions through validation filters
+    for idx in keep_indices:
+        cls = global_classes[idx]
+        conf = global_confs[idx]
+        label = CLASS_MAP.get(cls)
+        
+        # Calculate bounding dimensions from global coordinates
+        x1, y1, x2, y2 = global_boxes[idx]
+        bw, bh = x2 - x1, y2 - y1
+        box_area = bw * bh
+        aspect_ratio = max(bw, bh) / (min(bw, bh) + 1e-6)
+        
+        # ⭐ SHIELD 1: Force Shrivelled and Broken to pass through instantly.
+        # No confidence overrides, no size filters can touch them.
+        if label == "Shrivelled":
+            # If the model is guessing shrivelled with weak confidence, it's a sound grain!
+            if conf < 0.55:
+                label = "Sound Grain"
+                
+        elif label == "Broken":
+            # Broken pieces must be reasonably confident and physically small
+            if conf < 0.55 or box_area > 150:
+                label = "Sound Grain"
+                
+        elif label == "Foreign Matter":
+            if conf < 0.50:
+                label = "Sound Grain"          
 
+        # Apply strict safety overrides directly to string categories
+        elif label == "Ergoty Damage":
+            # Highly distinct shape (mAP50: 0.960). Relaxed confidence filter from 0.95 to 0.75
+            if conf < 0.70 or box_area < 50 or aspect_ratio < 1.6:
+                label = "Sound Grain"
+                
+        elif label == "Damage" and conf < 0.80:
+            # Strong performance baseline. Lowered block limit from 0.88 to 0.50 to accept clear classifications
+            label = "Sound Grain"
+            if aspect_ratio > 1.35 and conf < 0.88:
+                label = "Sound Grain"
+            
+        elif label == "Slightly Damage" and conf < 0.45:
+            # Lower model recall (0.670). Reduced limit from 0.50 to 0.30 so subtle blemishes aren't missed
+            label = "Sound Grain"
+        # Safe fallback for any unspecified class labels
+        else:
+            pass
+        
+        # Let Broken, Shrivelled, and Foreign Matter pass through cleanly as explicit strings
+        final_labels_list.append(label)
+
+        # 🎨 DRAW BOXES ON THE FULL-SIZE IMAGE
+        color = COLOR_MAP.get(label, (255, 255, 255)) # Default white if fallback
+        ix1, iy1, ix2, iy2 = map(int, [x1, y1, x2, y2])
+        
+        # Draw bounding box rectangle
+        cv2.rectangle(annotated_img, (ix1, iy1), (ix2, iy2), color, 2)
+        
+        # Add label text right above the box
+        text_str = f"{label} {conf:.2f}"
+        cv2.putText(annotated_img, text_str, (ix1, max(iy1 - 5, 15)), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+
+    return final_labels_list, annotated_img
+
+def generate_faq_pdf(total, counts, final_status):
+    """Generates the bytes for the PDF report"""
     pdf = FPDF()
     pdf.add_page()
-
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, "Digital Parkhi - URS QC Report", ln=True, align='C')
-
+    pdf.cell(0, 10, "Digital Parkhi: Official URS QC Report", ln=True, align='C')
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(0, 10, f"Generated: {datetime.now().strftime('%d-%m-%Y %H:%M')}", ln=True, align='C')
     pdf.ln(10)
 
-    pdf.set_font("Arial", '', 11)
-
-    pdf.cell(0, 10, f"Total Grains: {total}", ln=True)
-
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, f"TOTAL GRAINS SCANNED: {total}", ln=True)
     pdf.ln(5)
 
+    # Table Layout Setup
+    pdf.set_fill_color(200, 220, 255)
+    pdf.cell(60, 10, " Category", 1, 0, 'L', True)
+    pdf.cell(40, 10, " Found %", 1, 0, 'C', True)
+    pdf.cell(40, 10, " Limit %", 1, 0, 'C', True)
+    pdf.cell(40, 10, " Status", 1, 1, 'C', True)
+
+    pdf.set_font("Arial", '', 10)
+    
+    # Pre-calculate joint metrics for row evaluations
+    damage_pct = (counts.get('Damage', 0) / total * 100) if total > 0 else 0.0
+    slightly_damage_pct = (counts.get('Slightly Damage', 0) / total * 100) if total > 0 else 0.0
+    combined_damage_pct = damage_pct + slightly_damage_pct
+    # Loop through specifications sequentially
     for cat, limit in WHEAT_URS_NORMS.items():
-
         if cat == 'Shrivelled & Broken':
-            val = (
-                counts.get('Shrivelled', 0) +
-                counts.get('Broken', 0)
-            ) / total * 100 if total > 0 else 0
-
-        elif cat == 'Damage & Slightly Damage':
-            val = (
-                counts.get('Damage', 0) +
-                counts.get('Slightly Damage', 0)
-            ) / total * 100 if total > 0 else 0
-
+            val = ((counts.get('Shrivelled', 0) + counts.get('Broken', 0)) / total * 100) if total > 0 else 0
         else:
-            val = counts.get(cat, 0) / total * 100 if total > 0 else 0
+            val = (counts.get(cat, 0) / total * 100) if total > 0 else 0
+        # Determine status flag cleanly based on joint URS parameters
+        if cat in ['Damage', 'Slightly Damage']:
+            status = "FAIL" if combined_damage_pct > 6.0 else "OK"
+        else:
+            status = "OK" if val <= limit else "FAIL"
+        
+        pdf.cell(60, 10, f" {cat}", 1)
+        pdf.cell(40, 10, f"{val:.2f}%", 1, 0, 'C')
+        pdf.cell(40, 10, f"{limit}%", 1, 0, 'C')
+        pdf.cell(40, 10, status, 1, 1, 'C')
 
-        status = "OK" if val <= limit else "FAIL"
-
-        pdf.cell(
-            0,
-            10,
-            f"{cat}: {val:.2f}% | Limit {limit}% | {status}",
-            ln=True
-        )
-
+    # Add the structural breakdown line for the joint limit row matching the app screen
+    joint_row_status = "FAIL" if combined_damage_pct > 6.0 else "OK"
+    pdf.cell(60, 10, "Damage & Slightly Damage", 1)
+    pdf.cell(40, 10, f"{combined_damage_pct:.2f}%", 1, 0, 'C')
+    pdf.cell(40, 10, "6.00%", 1, 0, 'C')
+    pdf.cell(40, 10, joint_row_status, 1, 1, 'C')
+    
     pdf.ln(10)
-
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 10, f"FINAL STATUS: {final_status}", ln=True)
-
+    pdf.cell(0, 15, f"FINAL RESULT: {final_status}", border=1, ln=True, align='C')
+    
     return pdf.output(dest='S').encode('latin-1')
