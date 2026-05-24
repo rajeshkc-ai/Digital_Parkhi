@@ -124,11 +124,11 @@ def segment_grains(image):
         area = cv2.contourArea(cnt)
 
         # Reject tiny dust
-        if area < 25:
+        if area < 70:
             continue
 
         # Reject merged huge regions
-        if area > 3500:
+        if area > 1400:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
@@ -163,167 +163,98 @@ def segment_grains(image):
 
 def classify_grain(cnt, roi_bgr, roi_gray):
 
-    area = cv2.contourArea(cnt)
+    import cv2
+    import numpy as np
 
-    if area < 25:
-        return None
+    # -------------------------------------------------
+    # BASIC FEATURES
+    # -------------------------------------------------
+
+    area = cv2.contourArea(cnt)
 
     x, y, w, h = cv2.boundingRect(cnt)
 
-    aspect_ratio = max(w, h) / (min(w, h) + 1e-6)
+    aspect_ratio = h / (w + 1e-6)
 
-    hull = cv2.convexHull(cnt)
+    perimeter = cv2.arcLength(cnt, True)
 
-    hull_area = cv2.contourArea(hull)
+    circularity = (4 * np.pi * area) / ((perimeter * perimeter) + 1e-6)
 
-    solidity = area / (hull_area + 1e-6)
-
-    # ---------------------------
-    # COLOR FEATURES
-    # ---------------------------
+    # -------------------------------------------------
+    # HSV FEATURES
+    # -------------------------------------------------
 
     hsv = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2HSV)
 
-    mean_h = np.mean(hsv[:, :, 0])
-    mean_s = np.mean(hsv[:, :, 1])
-    mean_v = np.mean(hsv[:, :, 2])
+    h_mean = np.mean(hsv[:, :, 0])
+    s_mean = np.mean(hsv[:, :, 1])
+    v_mean = np.mean(hsv[:, :, 2])
 
-    # ---------------------------
-    # TEXTURE FEATURES
-    # ---------------------------
+    # -------------------------------------------------
+    # GRAY FEATURES
+    # -------------------------------------------------
 
-    lap_var = cv2.Laplacian(
-        roi_gray,
-        cv2.CV_64F
-    ).var()
+    gray_mean = np.mean(roi_gray)
 
-    std_intensity = np.std(roi_gray)
+    gray_std = np.std(roi_gray)
 
-    # ---------------------------
+    # -------------------------------------------------
     # EDGE FEATURES
-    # ---------------------------
+    # -------------------------------------------------
 
-    edges = cv2.Canny(roi_gray, 50, 150)
+    edges = cv2.Canny(roi_gray, 60, 160)
 
     edge_density = np.sum(edges > 0) / (roi_gray.size + 1e-6)
 
-    # ---------------------------
-    # LUSTRE LOSS DETECTION
-    # ---------------------------
+    # -------------------------------------------------
+    # TEXTURE FEATURES
+    # -------------------------------------------------
 
-    # Pale / dull wheat grains
-    if (
-        mean_s < 65
-        and mean_v > 125
-        and edge_density < 0.18
-    ):
-        return "Lustre Loss"
+    lap_var = cv2.Laplacian(roi_gray, cv2.CV_64F).var()
 
-    # =====================================================
-    # FOREIGN MATTER
-    # =====================================================
+    # =================================================
+    # CLASSIFICATION RULES
+    # =================================================
+
+    # -------------------------------------------------
+    # SHRIVELLED / BROKEN
+    # -------------------------------------------------
 
     if (
-        mean_v < 85
-        and mean_s < 25
+        area < 110
+        or aspect_ratio < 1.25
+        or circularity > 0.58
     ):
-        return 'Foreign Matter'
+        return "Shrivelled"
 
-    # =====================================================
-    # BROKEN
-    # =====================================================
-
-    if area < 95:
-        return 'Broken'
-
-    # =====================================================
-    # SHRIVELLED
-    # =====================================================
-
-    shrivel_score = 0
-
-    if aspect_ratio > 3.0:
-        shrivel_score += 1
-
-    if solidity < 0.82:
-        shrivel_score += 1
-
-    if mean_v < 125:
-        shrivel_score += 1
-
-    if shrivel_score >= 2:
-        return 'Shrivelled'
-
-    # ---------------------------
-    # IMPROVED DAMAGE DETECTION
-    # ---------------------------
-
-    # Dark spots / fungal damage
-    dark_pixels = np.sum(roi_gray < 70)
-    dark_ratio = dark_pixels / (roi_gray.size + 1e-6)
-
-    # Texture variation
-    texture_std = np.std(roi_gray)
-
-    # Strong damaged grain detection
-    if (
-        dark_ratio > 0.12 or
-        edge_density > 0.18 or
-        texture_std > 42
-    ):
-        return "Damage"   
-        
-    # =====================================================
-    # DAMAGE
-    # =====================================================
-
-    damage_score = 0
-
-    if lap_var > 450:
-        damage_score += 1
-
-    if edge_density > 0.18:
-        damage_score += 1
-
-    if std_intensity > 42:
-        damage_score += 1
-
-    if mean_h < 18:
-        damage_score += 1
-
-    if damage_score >= 3:
-        return 'Damage'
-
-    # =====================================================
+    # -------------------------------------------------
     # LUSTRE LOSS
-    # =====================================================
+    # -------------------------------------------------
 
-    lustre_score = 0
-
-    # Pale wheat
-    if mean_s < 65:
-        lustre_score += 1
-
-    # Bright faded grain
-    if mean_v > 155:
-        lustre_score += 1
-
-    # Smooth surface
-    if std_intensity < 34:
-        lustre_score += 1
-
-    # Low texture
-    if edge_density < 0.12:
-        lustre_score += 1
-
-    # Whitish appearance
-    #if mean_b > mean_r:
-        #lustre_score += 1
-
-    if lustre_score >= 3:
+    if (
+        s_mean < 52
+        and v_mean > 145
+        and gray_std < 32
+    ):
         return "Lustre Loss"
+
+    # -------------------------------------------------
+    # DAMAGE
+    # -------------------------------------------------
+
+    if (
+        edge_density > 0.12
+        and lap_var > 210
+        and gray_std > 26
+    ):
+        return "Damage"
+
+    # -------------------------------------------------
+    # SOUND GRAIN
+    # -------------------------------------------------
 
     return "Sound Grain"
+    
 # =========================================================
 # =========================================================
 # MAIN ANALYSIS FUNCTION
