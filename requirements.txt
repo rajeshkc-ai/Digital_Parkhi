@@ -1,7 +1,6 @@
 streamlit
 opencv-python-headless
-numpy
 ultralytics
+numpy
 torch
-torchvision
 fpdf
