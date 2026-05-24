@@ -20,7 +20,10 @@ if 'cat' not in st.session_state: st.session_state.cat = None
 def load_model():
     return YOLO("best.pt")
 
-model = load_model()
+try:
+    model = load_model()
+except Exception as e:
+    st.error(f"Failed to load weights file (best.pt): {e}")
 
 # --- NAVIGATION ---
 if st.session_state.page == 'welcome':
@@ -33,11 +36,11 @@ if st.session_state.page == 'welcome':
 elif st.session_state.page == 'select_grain':
     st.header("Select Grain Type")
     col1, col2 = st.columns(2)
-    if col1.button("Wheat"):
+    if col1.button("Wheat", use_container_width=True):
         st.session_state.grain = "Wheat"
         st.session_state.page = 'select_cat'
         st.rerun()
-    if col2.button("Rice"):
+    if col2.button("Rice", use_container_width=True):
         st.session_state.grain = "Rice"
         st.session_state.page = 'select_cat'
         st.rerun()
@@ -90,7 +93,13 @@ elif st.session_state.page == 'upload':
         # 2. IMAGE SCANNING ENGINE
         with st.spinner("Applying Deep Scan (Slicing & Enhancement)..."):
             for f in files:
-                img = cv2.imdecode(np.frombuffer(f.read(), np.uint8), 1)
+                f.seek(0)  # Core fix for Streamlit file pointer resetting
+                file_bytes = np.frombuffer(f.read(), np.uint8)
+                img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+
+                if img is None:
+                    st.error(f"Skipping unreadable file: {f.name}")
+                    continue
 
                 # 💡 NOTICE: Now captures TWO items returned from analyze_sample
                 # Use the specific logic file's inference function
