@@ -52,52 +52,32 @@ def segment_grains(image):
 
     # STEP 4
     # ==========================================
-    # WATERSHED-BASED GRAIN SEGMENTATION
+    # IMPROVED WATERSHED SEGMENTATION
     # ==========================================
-
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # Better threshold
-    _, thresh = cv2.threshold(
-    gray,
-    210,
-    255,
-    cv2.THRESH_BINARY_INV
-    )
-
-    # Noise removal
-    kernel = np.ones((3,3), np.uint8)
-
-    opening = cv2.morphologyEx(
-        thresh,
-        cv2.MORPH_OPEN,
-        kernel,
-        iterations=2
-    )
-
-    # Sure background
-    sure_bg = cv2.dilate(opening, kernel, iterations=3)
 
     # Distance transform
     dist_transform = cv2.distanceTransform(
-        opening,
+        thresh,
         cv2.DIST_L2,
         5
     )
 
-    # Sure foreground
+    # Strong foreground peaks
     _, sure_fg = cv2.threshold(
         dist_transform,
-        0.35 * dist_transform.max(),
+        0.45 * dist_transform.max(),
         255,
         0
     )
 
     sure_fg = np.uint8(sure_fg)
 
+    # Background
+    sure_bg = cv2.dilate(thresh, kernel, iterations=2)
+
     unknown = cv2.subtract(sure_bg, sure_fg)
 
-    # Marker labelling
+    # Connected components
     num_markers, markers = cv2.connectedComponents(sure_fg)
 
     markers = markers + 1
@@ -105,7 +85,7 @@ def segment_grains(image):
     markers[unknown == 255] = 0
 
     # Watershed
-    markers = cv2.watershed(img, markers)
+    markers = cv2.watershed(image, markers)
 
     grain_boxes = []
 
@@ -114,7 +94,7 @@ def segment_grains(image):
         if marker_id <= 1:
             continue
 
-        mask = np.uint8(markers == marker_id)
+        mask = np.uint8(markers == marker_id) * 255
 
         contours, _ = cv2.findContours(
             mask,
@@ -129,20 +109,24 @@ def segment_grains(image):
 
         area = cv2.contourArea(cnt)
 
-        # Remove tiny noise
-        if area < 80:
+        # Remove tiny dust
+        if area < 60:
             continue
 
-        # Remove giant merged objects
-        if area > 4000:
+        # Remove giant merged regions
+        if area > 2500:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
 
-        # Shape filtering
-        aspect_ratio = max(h, w) / float(min(h, w) + 1e-6)
+        # Wheat grain filtering
+        aspect_ratio = max(h, w) / (min(h, w) + 1e-6)
 
-        if aspect_ratio < 1.3:
+        if aspect_ratio < 1.4:
+            continue
+
+        # Reject very large merged grains
+        if w > 80 or h > 80:
             continue
 
         grain_boxes.append((x, y, w, h))
