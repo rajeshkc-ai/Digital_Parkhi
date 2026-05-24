@@ -126,11 +126,11 @@ def segment_grains(image):
         area = cv2.contourArea(cnt)
 
         # Reject tiny dust
-        if area < 90:
+        if area < 130:
             continue
 
         # Reject merged huge regions
-        if area > 1800:
+        if area > 1200:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
@@ -152,7 +152,7 @@ def segment_grains(image):
             continue
 
         # Reject merged grains
-        if w > 55 or h > 55:
+        if w > 42 or h > 42:
             continue
 
         duplicate = False
@@ -240,21 +240,31 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     # IMPROVED CLASSIFICATION RULES
     # =================================================
 
-    # DARK PIXEL ANALYSIS
-    dark_pixels = np.sum(roi_gray < 70)
+    # Dark pixel ratio
+    dark_pixels = np.sum(roi_gray < 85)
     dark_ratio = dark_pixels / (roi_gray.size + 1e-6)
 
-    # FILL RATIO
+    # Fill ratio
     fill_ratio = area / ((w * h) + 1e-6)
+
+    # Width-height ratio
+    wh_ratio = w / (h + 1e-6)
+
+    # -------------------------------------------------
+    # BROKEN
+    # -------------------------------------------------
+
+    if area < 140:
+        return "Broken"
 
     # -------------------------------------------------
     # SHRIVELLED
     # -------------------------------------------------
 
-    if (
-        aspect_ratio < 1.45
-        and fill_ratio < 0.62
-        and gray_mean > 90
+    elif (
+        fill_ratio < 0.52
+        and aspect_ratio > 1.8
+        and gray_mean > 120
     ):
         return "Shrivelled"
 
@@ -263,8 +273,9 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     # -------------------------------------------------
 
     elif (
-        dark_ratio > 0.22
-        and gray_mean < 135
+        dark_ratio > 0.10
+        or gray_mean < 110
+        or lap_var > 900
     ):
         return "Damage"
 
@@ -273,9 +284,8 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     # -------------------------------------------------
 
     elif (
-        s_mean < 38
-        and v_mean > 145
-        and edge_density < 0.06
+        s_mean < 32
+        and v_mean > 150
     ):
         return "Lustre Loss"
 
