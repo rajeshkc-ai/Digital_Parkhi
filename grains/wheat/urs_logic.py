@@ -271,7 +271,7 @@ def classify_grain(cnt, roi_bgr, roi_gray):
         edge_density > 0.18 or
         texture_std > 42
     ):
-        label = "Damage"   
+        return "Damage"   
         
     # =====================================================
     # DAMAGE
@@ -317,8 +317,8 @@ def classify_grain(cnt, roi_bgr, roi_gray):
         lustre_score += 1
 
     # Whitish appearance
-    if mean_b > mean_r:
-        lustre_score += 1
+    #if mean_b > mean_r:
+        #lustre_score += 1
 
     if lustre_score >= 3:
         return "Lustre Loss"
@@ -364,11 +364,6 @@ def analyze_sample(cv_img, model=None):
         
         roi_bgr = cv_img[y:y+h, x:x+w]
 
-        label = classify_grain(
-            cnt,
-            roi_bgr,
-            roi_gray
-        )
 
         if label is None:
             continue
