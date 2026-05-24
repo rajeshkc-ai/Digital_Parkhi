@@ -239,22 +239,29 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     if damage_score >= 3:
         return 'Damage'
 
-    # =====================================================
+        # =====================================================
     # LUSTRE LOSS
     # =====================================================
 
     lustre_score = 0
 
-    if mean_s < 38:
+    # Pale grain
+    if mean_s < 55:
         lustre_score += 1
 
-    if std_intensity < 26:
+    # Bright grain
+    if mean_v > 150:
         lustre_score += 1
 
-    if mean_v > 145:
+    # Smooth texture
+    if std_intensity < 32:
         lustre_score += 1
 
-    if lustre_score >= 2:
+    # Low edge variation
+    if edge_density < 0.08:
+        lustre_score += 1
+
+    if lustre_score >= 3:
         return 'Lustre Loss'
 
     return 'Sound Grain'
