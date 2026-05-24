@@ -50,6 +50,12 @@ def segment_grains(image):
         kernel,
         iterations=1
     )
+    thresh = cv2.morphologyEx(
+        thresh,
+        cv2.MORPH_CLOSE,
+        kernel,
+        iterations=1
+    )
 
     # ==========================================
     # DISTANCE TRANSFORM
@@ -101,13 +107,6 @@ def segment_grains(image):
 
         mask = np.uint8(markers == marker)
 
-        kernel = np.ones((2,2), np.uint8)
-
-        thresh = cv2.morphologyEx(
-            thresh,
-            cv2.MORPH_OPEN,
-            kernel,
-            iterations=1
         )
         
         contours, _ = cv2.findContours(
@@ -232,9 +231,9 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     # -------------------------------------------------
 
     if (
-        s_mean < 52
-        and v_mean > 145
-        and gray_std < 32
+        s_mean < 70
+        and v_mean > 135
+        and gray_std < 42
     ):
         return "Lustre Loss"
 
@@ -243,9 +242,9 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     # -------------------------------------------------
 
     if (
-        edge_density > 0.12
-        and lap_var > 210
-        and gray_std > 26
+        edge_density > 0.18
+        and lap_var > 420
+        and gray_std > 38
     ):
         return "Damage"
 
