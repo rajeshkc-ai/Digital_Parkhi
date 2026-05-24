@@ -215,8 +215,8 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     # -------------------------------------------------
 
     if (
-        area < 110
-        or aspect_ratio < 1.25
+        area < 170
+        or aspect_ratio < 3.4
         or circularity > 0.58
     ):
         return "Shrivelled"
