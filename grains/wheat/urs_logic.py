@@ -213,8 +213,8 @@ def classify_grain(cnt, roi_bgr, roi_gray):
 
     # Pale / dull wheat grains
     if (
-        saturation < 65
-        and brightness > 125
+        mean_s < 65
+        and mean_v > 125
         and edge_density < 0.18
     ):
         return "Lustre Loss"
