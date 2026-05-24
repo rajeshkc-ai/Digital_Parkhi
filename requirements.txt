@@ -1,11 +1,7 @@
 streamlit
 opencv-python-headless
 numpy
-pillow
-scikit-image
-scikit-learn
-matplotlib
-pandas
+ultralytics
 torch
 torchvision
 fpdf
