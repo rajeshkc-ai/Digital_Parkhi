@@ -312,7 +312,7 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     if lustre_score >= 3:
         return "Lustre Loss"
 
-    return 'Sound Grain'
+    return label
 # =========================================================
 # =========================================================
 # MAIN ANALYSIS FUNCTION
