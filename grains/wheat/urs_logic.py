@@ -103,6 +103,7 @@ def segment_grains(image):
     markers = cv2.watershed(image, markers)
 
     grain_boxes = []
+    filtered_boxes = []
 
     for marker in np.unique(markers):
 
@@ -125,11 +126,11 @@ def segment_grains(image):
         area = cv2.contourArea(cnt)
 
         # Reject tiny dust
-        if area < 60:
+        if area < 90:
             continue
 
         # Reject merged huge regions
-        if area > 2500:
+        if area > 1800:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
@@ -151,10 +152,31 @@ def segment_grains(image):
             continue
 
         # Reject merged grains
-        if w > 70 or h > 70:
+        if w > 55 or h > 55:
             continue
 
-        grain_boxes.append((x, y, w, h))
+        duplicate = False
+
+        for (fx, fy, fw, fh) in filtered_boxes:
+
+            xx1 = max(x, fx)
+            yy1 = max(y, fy)
+            xx2 = min(x + w, fx + fw)
+            yy2 = min(y + h, fy + fh)
+
+            inter = max(0, xx2 - xx1) * max(0, yy2 - yy1)
+
+            union = (w * h) + (fw * fh) - inter
+
+            iou = inter / (union + 1e-6)
+
+            if iou > 0.30:
+                duplicate = True
+                break
+
+        if not duplicate:
+            filtered_boxes.append((x, y, w, h))
+            grain_boxes.append((x, y, w, h))
 
     return grain_boxes
 
@@ -214,41 +236,49 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     # CLASSIFICATION RULES
     # =================================================
 
+    # =================================================
+    # IMPROVED CLASSIFICATION RULES
+    # =================================================
+
+    # DARK PIXEL ANALYSIS
+    dark_pixels = np.sum(roi_gray < 70)
+    dark_ratio = dark_pixels / (roi_gray.size + 1e-6)
+
+    # FILL RATIO
+    fill_ratio = area / ((w * h) + 1e-6)
+
+    # -------------------------------------------------
+    # SHRIVELLED
+    # -------------------------------------------------
+
+    if (
+        aspect_ratio < 1.45
+        and fill_ratio < 0.62
+        and gray_mean > 90
+    ):
+        return "Shrivelled"
+
     # -------------------------------------------------
     # DAMAGE
     # -------------------------------------------------
 
-    if (
-        gray_mean < 95
-        or s_mean > 145
-        or lap_var > 650
+    elif (
+        dark_ratio > 0.22
+        and gray_mean < 135
     ):
         return "Damage"
-
-    # -------------------------------------------------
-    # SHRIVELLED / BROKEN
-    # -------------------------------------------------
-
-    if (
-        area < 140
-        and circularity > 0.42
-        and gray_std < 32
-    ):
-        return "Shrivelled"
 
     # -------------------------------------------------
     # LUSTRE LOSS
     # -------------------------------------------------
 
-    if (
-        s_mean < 55
-        and v_mean > 125
-        and gray_std < 42
-        and edge_density < 0.08
+    elif (
+        s_mean < 38
+        and v_mean > 145
+        and edge_density < 0.06
     ):
         return "Lustre Loss"
 
-    
     # -------------------------------------------------
     # SOUND GRAIN
     # -------------------------------------------------
