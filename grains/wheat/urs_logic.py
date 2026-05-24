@@ -121,7 +121,7 @@ def segment_grains(image):
         area = cv2.contourArea(cnt)
 
         # Reject tiny dust
-        if area < 20:
+        if area < 60:
             continue
 
         # Reject merged huge regions
@@ -139,11 +139,11 @@ def segment_grains(image):
         # Wheat grains are elongated
         aspect_ratio = max(h, w) / (min(h, w) + 1e-6)
 
-        if aspect_ratio < 1.4:
+        if aspect_ratio < 1.15:
             continue
         
         # Ignore extremely thin noise
-        if w < 8 or h < 18:
+        if w < 8 or h < 8:
             continue
 
         # Reject merged grains
@@ -168,7 +168,7 @@ def classify_grain(cnt, roi_bgr, roi_gray):
 
     x, y, w, h = cv2.boundingRect(cnt)
 
-    aspect_ratio = h / (w + 1e-6)
+    aspect_ratio = max(h, w) / (min(h, w) + 1e-6)
 
     perimeter = cv2.arcLength(cnt, True)
 
@@ -215,9 +215,9 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     # -------------------------------------------------
 
     if (
-        edge_density > 0.18
-        and lap_var > 420
-        and gray_std > 42
+        gray_mean < 95
+        or s_mean > 145
+        or lap_var > 650
     ):
         return "Damage"
 
@@ -226,9 +226,9 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     # -------------------------------------------------
 
     if (
-        area < 170
-        or aspect_ratio < 3.4
-        or circularity > 0.58
+        area < 140
+        and circularity > 0.42
+        and gray_std < 32
     ):
         return "Shrivelled"
 
