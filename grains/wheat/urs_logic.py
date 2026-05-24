@@ -227,14 +227,25 @@ def analyze_sample(cv_img, model=None):
 
     gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
 
-    for cnt in contours:
+    for (x, y, w, h) in contours:
 
-        area = cv2.contourArea(cnt)
+        roi_gray = gray[y:y+h, x:x+w]
 
-        if area < 20:
-            continue
+        roi_bgr = cv_img[y:y+h, x:x+w]
 
-        x, y, w, h = cv2.boundingRect(cnt)
+        # Create fake contour from box
+        cnt = np.array([
+            [[x, y]],
+            [[x+w, y]],
+            [[x+w, y+h]],
+            [[x, y+h]]
+        ])
+
+        label = classify_grain(
+            cnt,
+            roi_bgr,
+            roi_gray
+            )
 
         roi_gray = gray[y:y+h, x:x+w]
 
