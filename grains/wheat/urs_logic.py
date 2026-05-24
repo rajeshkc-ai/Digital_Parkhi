@@ -15,9 +15,13 @@ WHEAT_URS_NORMS = {
 CLASS_MAP = {
     0: 'Broken',
     1: 'Damage',
-    2: 'Foreign Matter',
-    3: 'Shrivelled',
-    4: 'Sound Grain'
+    2: 'Ergoty Damage',
+    3: 'Foreign Matter',
+    4: 'Shrivelled'
+    5: 'Slightly Damage',
+    6: 'Sound Grain',
+    7: 'Lustre Loss'
+    
 }
 # =========================================================
 # IMAGE SEGMENTATION
@@ -298,11 +302,26 @@ def analyze_sample(cv_img, model=None):
             color = (255, 0, 255)
 
         elif label == 'Shrivelled':
-            color = (0, 255, 255)
+            color = (255, 255, 0)
 
         elif label == 'Lustre Loss':
             color = (255, 255, 255)
 
+        elif label == 'Damage':
+            color = (0, 0, 255)
+
+        elif label == 'Sound Grain':
+            color = (0, 255, 0)
+
+        elif label == 'Foreign Matter':
+            color = (0, 255, 255)
+
+        elif label == 'Slightly Damage':
+            color = (0, 165, 255)
+
+        elif label == 'Ergoty Damage':
+            color = (0, 0, 0)
+            
         cv2.rectangle(
             annotated,
             (x, y),
