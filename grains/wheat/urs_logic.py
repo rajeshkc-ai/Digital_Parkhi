@@ -106,8 +106,6 @@ def segment_grains(image):
             continue
 
         mask = np.uint8(markers == marker)
-
-        )
         
         contours, _ = cv2.findContours(
             mask,
@@ -285,12 +283,6 @@ def analyze_sample(cv_img, model=None):
             roi_bgr,
             roi_gray
             )
-
-        roi_gray = gray[y:y+h, x:x+w]
-
-        
-        roi_bgr = cv_img[y:y+h, x:x+w]
-
 
         if label is None:
             continue
