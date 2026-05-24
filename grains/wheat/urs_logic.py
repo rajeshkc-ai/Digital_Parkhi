@@ -101,18 +101,11 @@ def segment_grains(image):
 
         mask = np.uint8(markers == marker)
 
-        kernel = np.ones((3,3), np.uint8)
+        kernel = np.ones((2,2), np.uint8)
 
         thresh = cv2.morphologyEx(
             thresh,
             cv2.MORPH_OPEN,
-            kernel,
-            iterations=1
-        )
-
-        thresh = cv2.morphologyEx(
-            thresh,
-            cv2.MORPH_CLOSE,
             kernel,
             iterations=1
         )
@@ -131,14 +124,20 @@ def segment_grains(image):
         area = cv2.contourArea(cnt)
 
         # Reject tiny dust
-        if area < 80:
+        if area < 25:
             continue
 
         # Reject merged huge regions
-        if area > 1200:
+        if area > 3500:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
+
+        aspect_ratio = max(w, h) / (min(w, h) + 1e-6)
+
+        # Reject non-grain shapes
+        if aspect_ratio < 1.3:
+            continue
 
         # Wheat grains are elongated
         aspect_ratio = max(h, w) / (min(h, w) + 1e-6)
@@ -207,6 +206,18 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     edges = cv2.Canny(roi_gray, 50, 150)
 
     edge_density = np.sum(edges > 0) / (roi_gray.size + 1e-6)
+
+    # ---------------------------
+    # LUSTRE LOSS DETECTION
+    # ---------------------------
+
+    # Pale / dull wheat grains
+    if (
+        saturation < 65
+        and brightness > 125
+        and edge_density < 0.18
+    ):
+        return "Lustre Loss"
 
     # =====================================================
     # FOREIGN MATTER
@@ -312,7 +323,7 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     if lustre_score >= 3:
         return "Lustre Loss"
 
-    return label
+    return "Sound Grain"
 # =========================================================
 # =========================================================
 # MAIN ANALYSIS FUNCTION
