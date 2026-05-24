@@ -17,7 +17,7 @@ CLASS_MAP = {
     1: 'Damage',
     2: 'Ergoty Damage',
     3: 'Foreign Matter',
-    4: 'Shrivelled'
+    4: 'Shrivelled',
     5: 'Slightly Damage',
     6: 'Sound Grain',
     7: 'Lustre Loss'
