@@ -1,6 +1,7 @@
 streamlit
-opencv-python-headless
-ultralytics
 numpy
-torch
+opencv-python-headless
 fpdf
+Pillow
+scikit-image
+scipy
