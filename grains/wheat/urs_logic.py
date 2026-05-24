@@ -96,40 +96,9 @@ def analyze_sample(cv_img, model):
         box_area = bw * bh
         aspect_ratio = max(bw, bh) / (min(bw, bh) + 1e-6)
         
-        # ⭐ SHIELD 1: Force Shrivelled and Broken to pass through instantly.
-        # No confidence overrides, no size filters can touch them.
-        if label == "Shrivelled":
-            # If the model is guessing shrivelled with weak confidence, it's a sound grain!
-            if conf < 0.55:
-                label = "Sound Grain"
-                
-        elif label == "Broken":
-            # Broken pieces must be reasonably confident and physically small
-            if conf < 0.55 or box_area > 150:
-                label = "Sound Grain"
-                
-        elif label == "Foreign Matter":
-            if conf < 0.50:
-                label = "Sound Grain"          
-
-        # Apply strict safety overrides directly to string categories
-        elif label == "Ergoty Damage":
-            # Highly distinct shape (mAP50: 0.960). Relaxed confidence filter from 0.95 to 0.75
-            if conf < 0.70 or box_area < 50 or aspect_ratio < 1.6:
-                label = "Sound Grain"
-                
-        elif label == "Damage" and conf < 0.80:
-            # Strong performance baseline. Lowered block limit from 0.88 to 0.50 to accept clear classifications
-            label = "Sound Grain"
-            if aspect_ratio > 1.35 and conf < 0.88:
-                label = "Sound Grain"
-            
-        elif label == "Slightly Damage" and conf < 0.45:
-            # Lower model recall (0.670). Reduced limit from 0.50 to 0.30 so subtle blemishes aren't missed
-            label = "Sound Grain"
-        # Safe fallback for any unspecified class labels
-        else:
-            pass
+        # Minimal filtering only
+        if conf < 0.35:
+            continue
         
         # Let Broken, Shrivelled, and Foreign Matter pass through cleanly as explicit strings
         final_labels_list.append(label)
