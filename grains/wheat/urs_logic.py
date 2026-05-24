@@ -121,11 +121,11 @@ def segment_grains(image):
         area = cv2.contourArea(cnt)
 
         # Reject tiny dust
-        if area < 70:
+        if area < 20:
             continue
 
         # Reject merged huge regions
-        if area > 1400:
+        if area > 2500:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
@@ -211,6 +211,17 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     # =================================================
 
     # -------------------------------------------------
+    # DAMAGE
+    # -------------------------------------------------
+
+    if (
+        edge_density > 0.18
+        and lap_var > 420
+        and gray_std > 42
+    ):
+        return "Damage"
+
+    # -------------------------------------------------
     # SHRIVELLED / BROKEN
     # -------------------------------------------------
 
@@ -226,23 +237,14 @@ def classify_grain(cnt, roi_bgr, roi_gray):
     # -------------------------------------------------
 
     if (
-        s_mean < 70
-        and v_mean > 135
+        s_mean < 55
+        and v_mean > 125
         and gray_std < 42
+        and edge_density < 0.08
     ):
         return "Lustre Loss"
 
-    # -------------------------------------------------
-    # DAMAGE
-    # -------------------------------------------------
-
-    if (
-        edge_density > 0.18
-        and lap_var > 420
-        and gray_std > 38
-    ):
-        return "Damage"
-
+    
     # -------------------------------------------------
     # SOUND GRAIN
     # -------------------------------------------------
