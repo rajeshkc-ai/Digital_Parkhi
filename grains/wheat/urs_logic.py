@@ -33,7 +33,7 @@ def analyze_sample(cv_img, model):
     # 2. Slice Setup
     h, w, _ = img.shape
     slice_size = 640
-    step = int(slice_size * 0.75) # 25% overlap
+    step = int(slice_size * 0.90) # 10% overlap
     
     global_boxes = []
     global_confs = []
@@ -46,7 +46,7 @@ def analyze_sample(cv_img, model):
             tile = img[y:y2, x:x2]
             
             # Using 0.15 baseline ensures smaller fragments are registered
-            preds = model.predict(tile, conf=0.25, iou=0.45, verbose=False)
+            preds = model.predict(tile, conf=0.40, iou=0.30, agnostic_nms=True, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
@@ -68,7 +68,7 @@ def analyze_sample(cv_img, model):
     # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
     confs_t = torch.tensor(global_confs)
-    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.45)
+    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.30)
 
     final_labels_list = []
 
@@ -96,16 +96,77 @@ def analyze_sample(cv_img, model):
         box_area = bw * bh
         aspect_ratio = max(bw, bh) / (min(bw, bh) + 1e-6)
         
-        # Minimal filtering only
-        if conf < 0.35:
-            continue
+        ix1, iy1, ix2, iy2 = map(int, [x1, y1, x2, y2])
         
-        # Let Broken, Shrivelled, and Foreign Matter pass through cleanly as explicit strings
+        # =========================
+        # AI SMART VALIDATION
+        # =========================
+
+        # Per-class confidence thresholds
+        CLASS_THRESHOLDS = {
+            'Sound Grain': 0.45,
+            'Damage': 0.60,
+            'Slightly Damage': 0.55,
+            'Shrivelled': 0.60,
+            'Broken': 0.50,
+            'Foreign Matter': 0.65,
+            'Ergoty Damage': 0.70,
+            'Lustre Loss': 0.60
+        }
+
+        # Reject low confidence detections
+        if conf < CLASS_THRESHOLDS.get(label, 0.50):
+            continue
+
+        # Crop grain region
+        crop = img[max(0, iy1):min(h, iy2), max(0, ix1):min(w, ix2)]
+
+        if crop.size == 0:
+            continue
+
+        # Convert to HSV
+        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+
+        # Texture sharpness
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+
+        # Mean brightness
+        brightness = np.mean(gray)
+
+        # Mean saturation
+        saturation = np.mean(hsv[:, :, 1])
+
+        # =========================
+        # CLASS VALIDATIONS
+        # =========================
+
+        # Damage grains are darker
+        if label == "Damage":
+            if brightness > 150:
+                continue
+
+        # Shrivelled grains have low texture
+        if label == "Shrivelled":
+            if lap_var > 120:
+                continue
+
+        # Lustre Loss has low saturation
+        if label == "Lustre Loss":
+            if saturation > 60:
+                continue
+
+        # Sound grain should not be too dark
+        if label == "Sound Grain":
+            if brightness < 70:
+                continue
+
+        # Accept final label
         final_labels_list.append(label)
 
         # 🎨 DRAW BOXES ON THE FULL-SIZE IMAGE
         color = COLOR_MAP.get(label, (255, 255, 255)) # Default white if fallback
-        ix1, iy1, ix2, iy2 = map(int, [x1, y1, x2, y2])
+        
         
         # Draw bounding box rectangle
         cv2.rectangle(annotated_img, (ix1, iy1), (ix2, iy2), color, 2)
