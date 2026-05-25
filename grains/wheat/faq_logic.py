@@ -95,7 +95,10 @@ def analyze_sample(cv_img, model):
         bw, bh = x2 - x1, y2 - y1
         box_area = bw * bh
         aspect_ratio = max(bw, bh) / (min(bw, bh) + 1e-6)
-        
+
+        # Minimal filtering only
+        if conf < 0.35:
+            continue
                     
         # Let Broken, Shrivelled, and Foreign Matter pass through cleanly as explicit strings
         final_labels_list.append(label)
