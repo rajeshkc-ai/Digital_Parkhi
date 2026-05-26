@@ -9,6 +9,7 @@ WHEAT_URS_NORMS = {
     'Foreign Matter': 0.75,
     'Other Foodgrains': 2.0,
     'Shrivelled & Broken': 15.00,     # Relaxed from 6.0% to 15%
+    'Damage & Slightly Damage': 6.00,
     'Lustre Loss': 70.00    # New relaxed criteria up to 70%
 }
 
