@@ -46,7 +46,7 @@ def analyze_sample(cv_img, model):
             tile = img[y:y2, x:x2]
             
             # Using 0.15 baseline ensures smaller fragments are registered
-            preds = model.predict(tile, conf=0.08, iou=0.35, imgsz=960, agnostic_nms=False, verbose=False)
+            preds = model.predict(tile, conf=0.03, iou=0.30, imgsz=1280, agnostic_nms=False, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
@@ -68,9 +68,10 @@ def analyze_sample(cv_img, model):
     # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
     confs_t = torch.tensor(global_confs)
-    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.40)
+    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.25)
 
     final_labels_list = []
+    detected_boxes = []
 
     # Color map for beautiful boxes (B, G, R format for OpenCV)
     COLOR_MAP = {
@@ -97,28 +98,11 @@ def analyze_sample(cv_img, model):
         aspect_ratio = max(bw, bh) / (min(bw, bh) + 1e-6)
         
         ix1, iy1, ix2, iy2 = map(int, [x1, y1, x2, y2])
-        
-        # =========================
-        # PURE AI VALIDATION
-        # =========================
-
-        CLASS_THRESHOLDS = {
-            'Sound Grain': 0.18,
-            'Damage': 0.22,
-            'Slightly Damage': 0.20,
-            'Shrivelled': 0.22,
-            'Broken': 0.22,
-            'Foreign Matter': 0.25,
-            'Ergoty Damage': 0.30,
-            'Lustre Loss': 0.20
-        }
-
-        # Reject only very weak predictions
-        if conf < CLASS_THRESHOLDS.get(label, 0.30):
-            continue
 
         # Accept AI prediction directly
         final_labels_list.append(label)
+        # Store detected box
+        detected_boxes.append([ix1, iy1, ix2, iy2])
 
         # 🎨 DRAW BOXES ON THE FULL-SIZE IMAGE
         color = COLOR_MAP.get(label, (255, 255, 255)) # Default white if fallback
@@ -132,7 +116,80 @@ def analyze_sample(cv_img, model):
         cv2.putText(annotated_img, text_str, (ix1, max(iy1 - 5, 15)), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
 
+        # ==========================================
+        # FALLBACK GRAIN DETECTION
+        # ==========================================
+
+        remaining_boxes = detect_remaining_grains(
+            annotated_img,
+            detected_boxes
+        )
+
+        for (x1, y1, x2, y2) in remaining_boxes:
+
+            final_labels_list.append("Sound Grain")
+
+            cv2.rectangle(
+                annotated_img,
+                (x1, y1),
+                (x2, y2),
+                (0,255,0),
+                2
+            )
+
+            cv2.putText(
+                annotated_img,
+                "Sound Grain",
+                (x1, max(y1 - 5, 15)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0,255,0),
+                1,
+                cv2.LINE_AA
+            )
+
     return final_labels_list, annotated_img
+
+def detect_remaining_grains(image, detected_boxes):
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    _, thresh = cv2.threshold(
+        gray,
+        200,
+        255,
+        cv2.THRESH_BINARY_INV
+    )
+
+    contours, _ = cv2.findContours(
+        thresh,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    extra_boxes = []
+
+    for cnt in contours:
+
+        area = cv2.contourArea(cnt)
+
+        if area < 80 or area > 4000:
+            continue
+
+        x, y, w, h = cv2.boundingRect(cnt)
+
+        overlap = False
+
+        for bx1, by1, bx2, by2 in detected_boxes:
+
+            if x < bx2 and x+w > bx1 and y < by2 and y+h > by1:
+                overlap = True
+                break
+
+        if not overlap:
+            extra_boxes.append((x, y, x+w, y+h))
+
+    return extra_boxes
 
 def generate_faq_pdf(total, counts, final_status):
     """Generates the bytes for the PDF report"""
