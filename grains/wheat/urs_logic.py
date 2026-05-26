@@ -32,7 +32,7 @@ def analyze_sample(cv_img, model):
     
     # 2. Slice Setup
     h, w, _ = img.shape
-    slice_size = 1280
+    slice_size = 640
     step = int(slice_size * 0.75) # 25% overlap
     
     global_boxes = []
@@ -46,7 +46,7 @@ def analyze_sample(cv_img, model):
             tile = img[y:y2, x:x2]
             
             # Using 0.15 baseline ensures smaller fragments are registered
-            preds = model.predict(tile, conf=0.10, iou=0.45, agnostic_nms=False, verbose=False)
+            preds = model.predict(tile, conf=0.08, iou=0.35, imgsz=960, agnostic_nms=False, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
