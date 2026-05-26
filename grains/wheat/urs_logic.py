@@ -32,7 +32,7 @@ def analyze_sample(cv_img, model):
     
     # 2. Slice Setup
     h, w, _ = img.shape
-    slice_size = 640
+    slice_size = 1280
     step = int(slice_size * 0.75) # 25% overlap
     
     global_boxes = []
