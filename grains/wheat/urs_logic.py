@@ -31,8 +31,8 @@ def analyze_sample(cv_img, model):
     
     # 2. Slice Setup
     h, w, _ = img.shape
-    slice_size = 960
-    step = int(slice_size * 0.95) # 10% overlap
+    slice_size = 1280
+    step = int(slice_size * 0.75) # 25% overlap
     
     global_boxes = []
     global_confs = []
@@ -45,7 +45,7 @@ def analyze_sample(cv_img, model):
             tile = img[y:y2, x:x2]
             
             # Using 0.15 baseline ensures smaller fragments are registered
-            preds = model.predict(tile, conf=0.20, iou=0.45, agnostic_nms=False, verbose=False)
+            preds = model.predict(tile, conf=0.10, iou=0.45, agnostic_nms=False, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
@@ -67,7 +67,7 @@ def analyze_sample(cv_img, model):
     # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
     confs_t = torch.tensor(global_confs)
-    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.15)
+    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.40)
 
     final_labels_list = []
 
@@ -102,14 +102,14 @@ def analyze_sample(cv_img, model):
         # =========================
 
         CLASS_THRESHOLDS = {
-            'Sound Grain': 0.30,
-            'Damage': 0.35,
-            'Slightly Damage': 0.30,
-            'Shrivelled': 0.35,
-            'Broken': 0.35,
-            'Foreign Matter': 0.40,
-            'Ergoty Damage': 0.45,
-            'Lustre Loss': 0.30
+            'Sound Grain': 0.18,
+            'Damage': 0.22,
+            'Slightly Damage': 0.20,
+            'Shrivelled': 0.22,
+            'Broken': 0.22,
+            'Foreign Matter': 0.25,
+            'Ergoty Damage': 0.30,
+            'Lustre Loss': 0.20
         }
 
         # Reject only very weak predictions
