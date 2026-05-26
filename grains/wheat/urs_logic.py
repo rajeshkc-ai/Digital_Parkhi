@@ -46,7 +46,7 @@ def analyze_sample(cv_img, model):
             tile = img[y:y2, x:x2]
             
             # Using 0.15 baseline ensures smaller fragments are registered
-            preds = model.predict(tile, conf=0.03, iou=0.30, imgsz=1280, agnostic_nms=False, verbose=False)
+            preds = model.predict(tile, conf=0.35, iou=0.50, imgsz=1280, agnostic_nms=False, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
