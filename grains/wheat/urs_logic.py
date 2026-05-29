@@ -99,7 +99,7 @@ def analyze_sample(cv_img, model):
         label = CLASS_MAP.get(cls)
 
         CLASS_THRESHOLDS = {
-            'Foreign Matter': 0.60,
+            'Foreign Matter': 0.50,
             'Damage': 0.35,
             'Shrivelled': 0.50,
             'Broken': 0.50,
