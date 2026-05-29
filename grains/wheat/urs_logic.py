@@ -269,7 +269,7 @@ def generate_faq_pdf(total, counts, final_status):
         else:
             val = (counts.get(cat, 0) / total * 100) if total > 0 else 0
         # Determine status flag cleanly based on joint URS parameters
-        if cat in ['Damage', 'Slightly Damage']:
+        if cat == ['Damage', 'Slightly Damage']:
             status = "FAIL" if combined_damage_pct > 6.0 else "OK"
         else:
             status = "OK" if val <= limit else "FAIL"
