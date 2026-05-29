@@ -103,7 +103,7 @@ def analyze_sample(cv_img, model):
             'Damage': 0.35,
             'Shrivelled': 0.50,
             'Broken': 0.50,
-            'Lustre Loss': 0.10,
+            'Lustre Loss': 0.05,
             'Sound Grain': 0.40,
             'Slightly Damage': 0.35,
             'Ergoty Damage': 0.80
