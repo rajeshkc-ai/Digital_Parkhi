@@ -13,9 +13,16 @@ WHEAT_URS_NORMS = {
     'Lustre Loss': 70.00    # New relaxed criteria up to 70%
 }
 
-CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
-             4: 'Shrivelled', 5: 'Slightly Damage', 6: 'Sound Grain', 7: 'Lustre Loss'}
-
+CLASS_MAP = {
+    0: 'Broken',
+    1: 'Damage',
+    2: 'Ergoty Damage',
+    3: 'Foreign Matter',
+    4: 'Lustre Loss',
+    5: 'Shrivelled',
+    6: 'Slightly Damage',
+    7: 'Sound Grain'
+}
 
 def analyze_sample(cv_img, model):
     """Performs CLAHE enhancement and Sliced Inference with global NMS tracking"""
@@ -46,7 +53,7 @@ def analyze_sample(cv_img, model):
             tile = img[y:y2, x:x2]
             
             # Using 0.15 baseline ensures smaller fragments are registered
-            preds = model.predict(tile, conf=0.35, iou=0.65, imgsz=1280, agnostic_nms=False, verbose=False)
+            preds = model.predict(tile, conf=0.20, iou=0.45, imgsz=640, agnostic_nms=False, max_det=3000, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
@@ -68,7 +75,7 @@ def analyze_sample(cv_img, model):
     # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
     confs_t = torch.tensor(global_confs)
-    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.45)
+    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.30)
 
     final_labels_list = []
     detected_boxes = []
@@ -90,6 +97,20 @@ def analyze_sample(cv_img, model):
         cls = global_classes[idx]
         conf = global_confs[idx]
         label = CLASS_MAP.get(cls)
+
+        CLASS_THRESHOLDS = {
+            'Foreign Matter': 0.60,
+            'Damage': 0.35,
+            'Shrivelled': 0.35,
+            'Broken': 0.35,
+            'Lustre Loss': 0.25,
+            'Sound Grain': 0.40,
+            'Slightly Damage': 0.35,
+            'Ergoty Damage': 0.40
+        }
+
+        if conf < CLASS_THRESHOLDS.get(label, 0.35):
+            continue
         
         # Calculate bounding dimensions from global coordinates
         x1, y1, x2, y2 = global_boxes[idx]
@@ -116,37 +137,37 @@ def analyze_sample(cv_img, model):
         cv2.putText(annotated_img, text_str, (ix1, max(iy1 - 5, 15)), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
 
-        # ==========================================
-        # FALLBACK GRAIN DETECTION
-        # ==========================================
+    # ==========================================
+    # FALLBACK GRAIN DETECTION
+    # ==========================================
 
-        remaining_boxes = detect_remaining_grains(
+    remaining_boxes = detect_remaining_grains(
+        annotated_img,
+        detected_boxes
+    )
+
+    for (x1, y1, x2, y2) in remaining_boxes:
+
+        final_labels_list.append("Sound Grain")
+
+        cv2.rectangle(
             annotated_img,
-            detected_boxes
+            (x1, y1),
+            (x2, y2),
+            (0,255,0),
+            2
         )
 
-        for (x1, y1, x2, y2) in remaining_boxes:
-
-            final_labels_list.append("Sound Grain")
-
-            cv2.rectangle(
-                annotated_img,
-                (x1, y1),
-                (x2, y2),
-                (0,255,0),
-                2
-            )
-
-            cv2.putText(
-                annotated_img,
-                "Sound Grain",
-                (x1, max(y1 - 5, 15)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (0,255,0),
-                1,
-                cv2.LINE_AA
-            )
+        cv2.putText(
+            annotated_img,
+            "Sound Grain",
+            (x1, max(y1 - 5, 15)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0,255,0),
+            1,
+            cv2.LINE_AA
+        )
 
     return final_labels_list, annotated_img
 
@@ -156,7 +177,7 @@ def detect_remaining_grains(image, detected_boxes):
 
     _, thresh = cv2.threshold(
         gray,
-        200,
+        170,
         255,
         cv2.THRESH_BINARY_INV
     )
@@ -173,7 +194,7 @@ def detect_remaining_grains(image, detected_boxes):
 
         area = cv2.contourArea(cnt)
 
-        if area < 80 or area > 4000:
+        if area < 120 or area > 2500:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
