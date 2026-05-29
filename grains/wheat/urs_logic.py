@@ -103,10 +103,10 @@ def analyze_sample(cv_img, model):
             continue
 
         CLASS_THRESHOLDS = {
-            'Foreign Matter': 0.30,
+            'Foreign Matter': 0.40,
             'Damage': 0.10,
-            'Shrivelled': 0.40,
-            'Broken': 0.40,
+            'Shrivelled': 0.70,
+            'Broken': 0.65,
             'Lustre Loss': 0.10,
             'Sound Grain': 0.30,
             'Slightly Damage': 0.10,
@@ -146,7 +146,7 @@ def analyze_sample(cv_img, model):
     # ==========================================
 
     remaining_boxes = detect_remaining_grains(
-        cv_img.copy(),
+        annotated_img,
         detected_boxes
     )
 
@@ -162,19 +162,16 @@ def analyze_sample(cv_img, model):
             2
         )
 
-        # Draw label only for defect grains
-        if label not in ["Sound Grain", "Lustre Loss"]:
-            cv2.putText(
-                annotated_img,
-                label,
-                (x1, max(y1 - 5, 15)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (255,0,255) if label == "Broken" else (0,255,0),
-                1,
-                cv2.LINE_AA
-            )
-        
+        cv2.putText(
+            annotated_img,
+            label,
+            (x1, max(y1 - 5, 15)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255,0,255) if label == "Broken" else (0,255,0),
+            1,
+            cv2.LINE_AA
+        )
 
     return final_labels_list, annotated_img
 
@@ -182,29 +179,16 @@ def detect_remaining_grains(image, detected_boxes):
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Ignore top label region to avoid text contour detection
-    gray[:70, :] = 255
-
-    # Ignore left edge artifacts
-    gray[:, :25] = 255
-
-    # Remove top-right text artifacts
-    gray[:70, -120:] = 255
-
     _, thresh = cv2.threshold(
         gray,
-        145,
+        170,
         255,
         cv2.THRESH_BINARY_INV
     )
     
     # Separate touching grains
     kernel = np.ones((3,3), np.uint8)
-    thresh = cv2.morphologyEx(
-        thresh,
-        cv2.MORPH_OPEN,
-        kernel
-    )
+    thresh = cv2.erode(thresh, kernel, iterations=1)
 
     contours, _ = cv2.findContours(
         thresh,
@@ -217,30 +201,17 @@ def detect_remaining_grains(image, detected_boxes):
     for cnt in contours:
 
         area = cv2.contourArea(cnt)
-        
-        # Reject tiny dust/noise contours
-        if area < 120 or area > 2200:
+
+        if area < 45 or area > 2200:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
 
-        # Reject contours near image borders
-        if x < 20 or y < 20:
-            continue
-
-        # Reject extremely thin contours (text fragments)
-        if w < 12 or h < 12:
-            continue
-
         aspect_ratio = max(w, h) / (min(w, h) + 1e-6)
-        
-        # Reject abnormal dust-like shapes
-        if aspect_ratio > 7.5:
-            continue
 
         is_broken = (
-            area < 95
-            or (aspect_ratio < 1.5 and area < 85)
+            area < 140
+            or (aspect_ratio < 1.4 and area < 220)
         )
 
         overlap = False
@@ -298,7 +269,7 @@ def generate_faq_pdf(total, counts, final_status):
         else:
             val = (counts.get(cat, 0) / total * 100) if total > 0 else 0
         # Determine status flag cleanly based on joint URS parameters
-        if cat == 'Damage & Slightly Damage':
+        if cat in ['Damage', 'Slightly Damage']:
             status = "FAIL" if combined_damage_pct > 6.0 else "OK"
         else:
             status = "OK" if val <= limit else "FAIL"
