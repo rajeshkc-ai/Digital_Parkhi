@@ -146,7 +146,7 @@ def analyze_sample(cv_img, model):
     # ==========================================
 
     remaining_boxes = detect_remaining_grains(
-        annotated_img,
+        cv_img.copy(),
         detected_boxes
     )
 
@@ -181,14 +181,18 @@ def detect_remaining_grains(image, detected_boxes):
 
     _, thresh = cv2.threshold(
         gray,
-        170,
+        145,
         255,
         cv2.THRESH_BINARY_INV
     )
     
     # Separate touching grains
     kernel = np.ones((3,3), np.uint8)
-    thresh = cv2.erode(thresh, kernel, iterations=1)
+    thresh = cv2.morphologyEx(
+        thresh,
+        cv2.MORPH_OPEN,
+        kernel
+    )
 
     contours, _ = cv2.findContours(
         thresh,
@@ -211,7 +215,7 @@ def detect_remaining_grains(image, detected_boxes):
 
         is_broken = (
             area < 140
-            or (aspect_ratio < 1.4 and area < 220)
+            or (aspect_ratio < 1.8 and area < 130)
         )
 
         overlap = False
