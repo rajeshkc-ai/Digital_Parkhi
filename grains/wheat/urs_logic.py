@@ -164,7 +164,7 @@ def analyze_sample(cv_img, model):
 
         cv2.putText(
             annotated_img,
-            "Sound Grain",
+            label,
             (x1, max(y1 - 5, 15)),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
