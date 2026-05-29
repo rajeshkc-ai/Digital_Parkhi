@@ -162,22 +162,31 @@ def analyze_sample(cv_img, model):
             2
         )
 
-        cv2.putText(
-            annotated_img,
-            label,
-            (x1, max(y1 - 5, 15)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (255,0,255) if label == "Broken" else (0,255,0),
-            1,
-            cv2.LINE_AA
-        )
+        # Draw label only for defect grains
+        if label not in ["Sound Grain", "Lustre Loss"]:
+            cv2.putText(
+                annotated_img,
+                label,
+                (x1, max(y1 - 5, 15)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255,0,255) if label == "Broken" else (0,255,0),
+                1,
+                cv2.LINE_AA
+            )
+        
 
     return final_labels_list, annotated_img
 
 def detect_remaining_grains(image, detected_boxes):
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Ignore top label region to avoid text contour detection
+    gray[:70, :] = 255
+
+    # Ignore left edge artifacts
+    gray[:, :25] = 255
 
     _, thresh = cv2.threshold(
         gray,
@@ -210,6 +219,14 @@ def detect_remaining_grains(image, detected_boxes):
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
+
+        # Reject contours near image borders
+        if x < 20 or y < 20:
+            continue
+
+        # Reject extremely thin contours (text fragments)
+        if w < 8 or h < 8:
+            continue
 
         aspect_ratio = max(w, h) / (min(w, h) + 1e-6)
 
