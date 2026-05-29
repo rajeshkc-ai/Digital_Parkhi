@@ -75,7 +75,7 @@ def analyze_sample(cv_img, model):
     # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
     confs_t = torch.tensor(global_confs)
-    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.30)
+    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.18)
 
     final_labels_list = []
     detected_boxes = []
@@ -97,6 +97,10 @@ def analyze_sample(cv_img, model):
         cls = global_classes[idx]
         conf = global_confs[idx]
         label = CLASS_MAP.get(cls)
+        
+        # Reject weak foreign matter detections
+        if label == "Foreign Matter" and conf < 0.60:
+            continue
 
         CLASS_THRESHOLDS = {
             'Foreign Matter': 0.40,
@@ -146,9 +150,9 @@ def analyze_sample(cv_img, model):
         detected_boxes
     )
 
-    for (x1, y1, x2, y2) in remaining_boxes:
+    for (x1, y1, x2, y2, label) in remaining_boxes:
 
-        final_labels_list.append("Sound Grain")
+        final_labels_list.append(label)
 
         cv2.rectangle(
             annotated_img,
@@ -164,7 +168,7 @@ def analyze_sample(cv_img, model):
             (x1, max(y1 - 5, 15)),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
-            (0,255,0),
+            (255,0,255) if label == "Broken" else (0,255,0),
             1,
             cv2.LINE_AA
         )
@@ -181,6 +185,10 @@ def detect_remaining_grains(image, detected_boxes):
         255,
         cv2.THRESH_BINARY_INV
     )
+    
+    # Separate touching grains
+    kernel = np.ones((3,3), np.uint8)
+    thresh = cv2.erode(thresh, kernel, iterations=1)
 
     contours, _ = cv2.findContours(
         thresh,
@@ -194,10 +202,17 @@ def detect_remaining_grains(image, detected_boxes):
 
         area = cv2.contourArea(cnt)
 
-        if area < 120 or area > 2500:
+        if area < 45 or area > 2200:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
+
+        aspect_ratio = max(w, h) / (min(w, h) + 1e-6)
+
+        is_broken = (
+            area < 140
+            or (aspect_ratio < 1.4 and area < 220)
+        )
 
         overlap = False
 
@@ -208,7 +223,15 @@ def detect_remaining_grains(image, detected_boxes):
                 break
 
         if not overlap:
-            extra_boxes.append((x, y, x+w, y+h))
+
+            if is_broken:
+                extra_boxes.append(
+                    (x, y, x+w, y+h, "Broken")
+                )
+            else:
+                extra_boxes.append(
+                    (x, y, x+w, y+h, "Sound Grain")
+                )
 
     return extra_boxes
 
