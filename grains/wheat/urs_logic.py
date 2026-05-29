@@ -106,7 +106,7 @@ def analyze_sample(cv_img, model):
             'Lustre Loss': 0.25,
             'Sound Grain': 0.40,
             'Slightly Damage': 0.35,
-            'Ergoty Damage': 0.60
+            'Ergoty Damage': 0.80
         }
 
         if conf < CLASS_THRESHOLDS.get(label, 0.35):
