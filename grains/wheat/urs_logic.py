@@ -188,6 +188,9 @@ def detect_remaining_grains(image, detected_boxes):
     # Ignore left edge artifacts
     gray[:, :25] = 255
 
+    # Remove top-right text artifacts
+    gray[:70, -120:] = 255
+
     _, thresh = cv2.threshold(
         gray,
         145,
@@ -214,8 +217,9 @@ def detect_remaining_grains(image, detected_boxes):
     for cnt in contours:
 
         area = cv2.contourArea(cnt)
-
-        if area < 45 or area > 2200:
+        
+        # Reject tiny dust/noise contours
+        if area < 120 or area > 2200:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
@@ -225,14 +229,18 @@ def detect_remaining_grains(image, detected_boxes):
             continue
 
         # Reject extremely thin contours (text fragments)
-        if w < 8 or h < 8:
+        if w < 12 or h < 12:
             continue
 
         aspect_ratio = max(w, h) / (min(w, h) + 1e-6)
+        
+        # Reject abnormal dust-like shapes
+        if aspect_ratio > 7.5:
+            continue
 
         is_broken = (
-            area < 140
-            or (aspect_ratio < 1.8 and area < 130)
+            area < 95
+            or (aspect_ratio < 1.5 and area < 85)
         )
 
         overlap = False
@@ -290,7 +298,7 @@ def generate_faq_pdf(total, counts, final_status):
         else:
             val = (counts.get(cat, 0) / total * 100) if total > 0 else 0
         # Determine status flag cleanly based on joint URS parameters
-        if cat in ['Damage', 'Slightly Damage']:
+        if cat == 'Damage & Slightly Damage':
             status = "FAIL" if combined_damage_pct > 6.0 else "OK"
         else:
             status = "OK" if val <= limit else "FAIL"
