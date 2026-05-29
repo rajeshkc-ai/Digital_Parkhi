@@ -103,10 +103,10 @@ def analyze_sample(cv_img, model):
             continue
 
         CLASS_THRESHOLDS = {
-            'Foreign Matter': 0.40,
+            'Foreign Matter': 0.30,
             'Damage': 0.10,
-            'Shrivelled': 0.55,
-            'Broken': 0.55,
+            'Shrivelled': 0.40,
+            'Broken': 0.40,
             'Lustre Loss': 0.10,
             'Sound Grain': 0.30,
             'Slightly Damage': 0.10,
