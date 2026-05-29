@@ -46,7 +46,7 @@ def analyze_sample(cv_img, model):
             tile = img[y:y2, x:x2]
             
             # Using 0.15 baseline ensures smaller fragments are registered
-            preds = model.predict(tile, conf=0.10, iou=0.50, imgsz=1280, agnostic_nms=False, verbose=False)
+            preds = model.predict(tile, conf=0.35, iou=0.65, imgsz=1280, agnostic_nms=False, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
@@ -68,7 +68,7 @@ def analyze_sample(cv_img, model):
     # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
     confs_t = torch.tensor(global_confs)
-    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.25)
+    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.45)
 
     final_labels_list = []
     detected_boxes = []
