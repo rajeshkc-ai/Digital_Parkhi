@@ -99,13 +99,13 @@ def analyze_sample(cv_img, model):
         label = CLASS_MAP.get(cls)
         
         # Reject weak foreign matter detections
-        if label == "Foreign Matter" and conf < 0.70:
+        if label == "Foreign Matter" and conf < 0.55:
             continue
 
         CLASS_THRESHOLDS = {
-            'Foreign Matter': 0.70,
+            'Foreign Matter': 0.55,
             'Damage': 0.10,
-            'Shrivelled': 0.35,
+            'Shrivelled': 0.20,
             'Broken': 0.55,
             'Lustre Loss': 0.10,
             'Sound Grain': 0.30,
@@ -127,8 +127,8 @@ def analyze_sample(cv_img, model):
 
         if (
             label == "Foreign Matter"
-            and box_area < 250
-            and aspect_ratio > 1.5
+            and box_area < 500
+            and aspect_ratio > 1.35
         ):
             label = "Shrivelled"
         
@@ -220,12 +220,12 @@ def detect_remaining_grains(image, detected_boxes):
         aspect_ratio = max(w, h) / (min(w, h) + 1e-6)
 
         is_broken = (
-            area < 110
+            area < 80
         )
 
         is_shrivelled = (
-            110 <= area < 220
-            and aspect_ratio > 1.8
+            80 <= area < 350
+            and aspect_ratio > 1.45
         )
 
         overlap = False
