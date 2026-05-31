@@ -14,8 +14,16 @@ WHEAT_NORMS = {
     'Shrivelled & Broken': 6.00
 }
 
-CLASS_MAP = {0: 'Broken', 1: 'Damage', 2: 'Ergoty Damage', 3: 'Foreign Matter',
-             4: 'Shrivelled', 5: 'Slightly Damage', 6: 'Sound Grain'}
+CLASS_MAP = {
+    0: 'Broken',
+    1: 'Damage',
+    2: 'Ergoty Damage',
+    3: 'Foreign Matter',
+    4: 'Lustre Loss',
+    5: 'Shrivelled',
+    6: 'Slightly Damage',
+    7: 'Sound Grain'
+}
 
 
 def analyze_sample(cv_img, model):
@@ -34,7 +42,7 @@ def analyze_sample(cv_img, model):
     # 2. Slice Setup
     h, w, _ = img.shape
     slice_size = 640
-    step = int(slice_size * 0.90) # 10% overlap
+    step = int(slice_size * 0.75) # 10% overlap
     
     global_boxes = []
     global_confs = []
@@ -47,7 +55,7 @@ def analyze_sample(cv_img, model):
             tile = img[y:y2, x:x2]
             
             # Using 0.10 baseline ensures smaller fragments are registered
-            preds = model.predict(tile, conf=0.40, iou=0.30, agnostic_nms=True, verbose=False)
+            preds = model.predict(tile, conf=0.20, iou=0.45, agnostic_nms=False, max_det=3000, verbose=False)
             
             for r in preds:
                 for box in r.boxes:
@@ -69,9 +77,10 @@ def analyze_sample(cv_img, model):
     # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
     confs_t = torch.tensor(global_confs)
-    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.30)
+    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.18)
 
     final_labels_list = []
+    detected_boxes = []
     
     # Color map for beautiful boxes (B, G, R format for OpenCV)
     COLOR_MAP = {
@@ -89,6 +98,23 @@ def analyze_sample(cv_img, model):
         cls = global_classes[idx]
         conf = global_confs[idx]
         label = CLASS_MAP.get(cls)
+
+        # Reject weak foreign matter detections
+        if label == "Foreign Matter" and conf < 0.60:
+            continue
+
+        CLASS_THRESHOLDS = {
+            'Foreign Matter': 0.20,
+            'Damage': 0.10,
+            'Shrivelled': 0.70,
+            'Broken': 0.65,
+            'Sound Grain': 0.30,
+            'Slightly Damage': 0.10,
+            'Ergoty Damage': 0.80
+        }
+
+        if conf < CLASS_THRESHOLDS.get(label, 0.35):
+            continue
         
         # Calculate bounding dimensions from global coordinates
         x1, y1, x2, y2 = global_boxes[idx]
@@ -97,72 +123,13 @@ def analyze_sample(cv_img, model):
         aspect_ratio = max(bw, bh) / (min(bw, bh) + 1e-6)
 
         ix1, iy1, ix2, iy2 = map(int, [x1, y1, x2, y2])
-        
-        # =========================
-        # AI SMART VALIDATION
-        # =========================
-
-        # Per-class confidence thresholds
-        CLASS_THRESHOLDS = {
-            'Sound Grain': 0.45,
-            'Damage': 0.60,
-            'Slightly Damage': 0.55,
-            'Shrivelled': 0.60,
-            'Broken': 0.50,
-            'Foreign Matter': 0.65,
-            'Ergoty Damage': 0.70,
-            'Lustre Loss': 0.60
-        }
-
-        # Reject low confidence detections
-        if conf < CLASS_THRESHOLDS.get(label, 0.50):
-            continue
-
-        # Crop grain region
-        crop = img[max(0, iy1):min(h, iy2), max(0, ix1):min(w, ix2)]
-
-        if crop.size == 0:
-            continue
-
-        # Convert to HSV
-        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-
-        # Texture sharpness
-        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-        lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-
-        # Mean brightness
-        brightness = np.mean(gray)
-
-        # Mean saturation
-        saturation = np.mean(hsv[:, :, 1])
-
-        # =========================
-        # CLASS VALIDATIONS
-        # =========================
-
-        # Damage grains are darker
-        if label == "Damage":
-            if brightness > 150:
-                continue
-
-        # Shrivelled grains have low texture
-        if label == "Shrivelled":
-            if lap_var > 120:
-                continue
-
-        # Lustre Loss has low saturation
-        if label == "Lustre Loss":
-            if saturation > 60:
-                continue
-
-        # Sound grain should not be too dark
-        if label == "Sound Grain":
-            if brightness < 70:
-                continue
 
         # Accept final label
         final_labels_list.append(label)
+
+        # Store detected box
+        detected_boxes.append([ix1, iy1, ix2, iy2])
+
     
         # 🎨 DRAW BOXES ON THE FULL-SIZE IMAGE
         color = COLOR_MAP.get(label, (255, 255, 255)) # Default white if fallback
@@ -175,7 +142,100 @@ def analyze_sample(cv_img, model):
         text_str = f"{label} {conf:.2f}"
         cv2.putText(annotated_img, text_str, (ix1, max(iy1 - 5, 15)), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+
+    # ==========================================
+    # FALLBACK GRAIN DETECTION
+    # ==========================================
+
+    remaining_boxes = detect_remaining_grains(
+        annotated_img,
+        detected_boxes
+    )
+
+    for (x1, y1, x2, y2, label) in remaining_boxes:
+
+        final_labels_list.append(label)
+
+        cv2.rectangle(
+            annotated_img,
+            (x1, y1),
+            (x2, y2),
+            (0,255,0),
+            2
+        )
+
+        cv2.putText(
+            annotated_img,
+            label,
+            (x1, max(y1 - 5, 15)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255,0,255) if label == "Broken" else (0,255,0),
+            1,
+            cv2.LINE_AA
+        )
+  
     return final_labels_list, annotated_img
+
+def detect_remaining_grains(image, detected_boxes):
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    _, thresh = cv2.threshold(
+        gray,
+        170,
+        255,
+        cv2.THRESH_BINARY_INV
+    )
+    
+    # Separate touching grains
+    kernel = np.ones((3,3), np.uint8)
+    thresh = cv2.erode(thresh, kernel, iterations=1)
+
+    contours, _ = cv2.findContours(
+        thresh,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    extra_boxes = []
+
+    for cnt in contours:
+
+        area = cv2.contourArea(cnt)
+
+        if area < 45 or area > 2200:
+            continue
+
+        x, y, w, h = cv2.boundingRect(cnt)
+
+        aspect_ratio = max(w, h) / (min(w, h) + 1e-6)
+
+        is_broken = (
+            area < 140
+            or (aspect_ratio < 1.4 and area < 220)
+        )
+
+        overlap = False
+
+        for bx1, by1, bx2, by2 in detected_boxes:
+
+            if x < bx2 and x+w > bx1 and y < by2 and y+h > by1:
+                overlap = True
+                break
+
+        if not overlap:
+
+            if is_broken:
+                extra_boxes.append(
+                    (x, y, x+w, y+h, "Broken")
+                )
+            else:
+                extra_boxes.append(
+                    (x, y, x+w, y+h, "Sound Grain")
+                )
+
+    return extra_boxes
 
 def generate_faq_pdf(total, counts, final_status):
     """Generates the bytes for the PDF report"""
