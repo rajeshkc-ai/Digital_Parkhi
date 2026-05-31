@@ -99,11 +99,11 @@ def analyze_sample(cv_img, model):
         label = CLASS_MAP.get(cls)
         
         # Reject weak foreign matter detections
-        if label == "Foreign Matter" and conf < 0.40:
+        if label == "Foreign Matter" and conf < 0.70:
             continue
 
         CLASS_THRESHOLDS = {
-            'Foreign Matter': 0.20,
+            'Foreign Matter': 0.70,
             'Damage': 0.10,
             'Shrivelled': 0.35,
             'Broken': 0.55,
@@ -121,6 +121,16 @@ def analyze_sample(cv_img, model):
         bw, bh = x2 - x1, y2 - y1
         box_area = bw * bh
         aspect_ratio = max(bw, bh) / (min(bw, bh) + 1e-6)
+
+        # Re-route tiny foreign matter detections
+        # to shrivelled grain
+
+        if (
+            label == "Foreign Matter"
+            and box_area < 250
+            and aspect_ratio > 1.5
+        ):
+            label = "Shrivelled"
         
         ix1, iy1, ix2, iy2 = map(int, [x1, y1, x2, y2])
 
@@ -210,8 +220,12 @@ def detect_remaining_grains(image, detected_boxes):
         aspect_ratio = max(w, h) / (min(w, h) + 1e-6)
 
         is_broken = (
-            area < 140
-            or (aspect_ratio < 1.4 and area < 220)
+            area < 110
+        )
+
+        is_shrivelled = (
+            110 <= area < 220
+            and aspect_ratio > 1.8
         )
 
         overlap = False
@@ -225,10 +239,19 @@ def detect_remaining_grains(image, detected_boxes):
         if not overlap:
 
             if is_broken:
+
                 extra_boxes.append(
                     (x, y, x+w, y+h, "Broken")
                 )
+
+            elif is_shrivelled:
+
+                extra_boxes.append(
+                    (x, y, x+w, y+h, "Shrivelled")
+                )
+
             else:
+
                 extra_boxes.append(
                     (x, y, x+w, y+h, "Sound Grain")
                 )
@@ -269,7 +292,7 @@ def generate_faq_pdf(total, counts, final_status):
         else:
             val = (counts.get(cat, 0) / total * 100) if total > 0 else 0
         # Determine status flag cleanly based on joint URS parameters
-        if cat == ['Damage', 'Slightly Damage']:
+        if cat == 'Damage & Slightly Damage':
             status = "FAIL" if combined_damage_pct > 6.0 else "OK"
         else:
             status = "OK" if val <= limit else "FAIL"
