@@ -77,7 +77,7 @@ def analyze_sample(cv_img, model):
     # 3. Apply Global Non-Maximum Suppression to wipe out boundary duplicate counts
     boxes_t = torch.tensor(global_boxes)
     confs_t = torch.tensor(global_confs)
-    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.18)
+    keep_indices = torch.ops.torchvision.nms(boxes_t, confs_t, iou_threshold=0.30)
 
     final_labels_list = []
     detected_boxes = []
