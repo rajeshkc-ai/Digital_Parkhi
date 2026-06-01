@@ -212,12 +212,17 @@ def detect_remaining_grains(image, detected_boxes):
 
         area = cv2.contourArea(cnt)
 
-        if area < 45 or area > 2200:
+        if area < 150 or area > 2200:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
-
+        
+        if w < 12 or h < 12:
+            continue
         aspect_ratio = max(w, h) / (min(w, h) + 1e-6)
+
+        if aspect_ratio < 1.3 or aspect_ratio > 8:
+            continue
 
         is_broken = (
             area < 80
