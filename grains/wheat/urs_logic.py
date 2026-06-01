@@ -156,7 +156,7 @@ def analyze_sample(cv_img, model):
     # ==========================================
 
     remaining_boxes = detect_remaining_grains(
-        cv_img.copy(),
+        annotated_img,
         detected_boxes
     )
 
