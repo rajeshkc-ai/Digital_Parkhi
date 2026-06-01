@@ -100,16 +100,16 @@ def analyze_sample(cv_img, model):
         label = CLASS_MAP.get(cls)
 
         # Reject weak foreign matter detections
-        if label == "Foreign Matter" and conf < 0.60:
+        if label == "Foreign Matter" and conf < 0.40:
             continue
 
         CLASS_THRESHOLDS = {
-            'Foreign Matter': 0.20,
-            'Damage': 0.10,
+            'Foreign Matter': 0.40,
+            'Damage': 0.50,
             'Shrivelled': 0.70,
             'Broken': 0.65,
             'Sound Grain': 0.30,
-            'Slightly Damage': 0.10,
+            'Slightly Damage': 0.50,
             'Ergoty Damage': 0.80
         }
 
