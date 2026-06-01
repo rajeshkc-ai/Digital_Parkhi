@@ -212,7 +212,7 @@ def detect_remaining_grains(image, detected_boxes):
 
         area = cv2.contourArea(cnt)
 
-        if area < 150 or area > 2200:
+        if area < 120 or area > 1800:
             continue
 
         x, y, w, h = cv2.boundingRect(cnt)
